@@ -1,1 +1,3 @@
-# Real-Time_Operating_System_for_Microcontroller_Applications
+# Real-Time Operating System for Microcontroller Applications
+
+A FreeRTOS course project.
