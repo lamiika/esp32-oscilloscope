@@ -1,17 +1,20 @@
 container=platformio-esp32
+ 
+manager ?= docker 
+port ?= /dev/ttyACM0
 
 .PHONY: docker-build
 docker-build:
-	docker build -t $(container) .
+	${manager} build -t $(container) .
 
 .PHONY: docker-shell
 docker-shell:
-	docker run -it -v $(PWD):/workspace $(container) bash
+	${manager} run -it -v $(PWD):/workspace $(container) bash
 
 .PHONY: upload
 upload:
-	docker run -it --device /dev/ttyACM0 -v $(PWD):/workspace $(container) pio run -t upload
-
+	${manager} run -it --device ${port} --group-add keep-groups -v $(PWD):/workspace $(container) pio run -t upload --upload-port ${port}
+	
 .PHONY: depends
 depends:
-	docker run -it -v $(PWD):/workspace $(container) pio lib install
+	${manager} run -it -v $(PWD):/workspace $(container) pio lib install
