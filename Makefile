@@ -1,4 +1,4 @@
-container=platformio-esp32
+container = platformio-esp32
  
 manager ?= docker 
 port ?= /dev/ttyACM0
