@@ -2,17 +2,21 @@ FROM debian:13-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+RUN apt-get update && apt-get install -y ca-certificates
+
+RUN sed -i 's/http:/https:/g' /etc/apt/sources.list.d/*
+
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
-    python3-venv \
+    python3-venv
+
+RUN apt-get update && apt-get install -y \
     git \
     curl \
-    ca-certificates \
     udev \
     libusb-1.0-0 \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    build-essential
 
 WORKDIR /
 
