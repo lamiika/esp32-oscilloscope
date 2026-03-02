@@ -6,6 +6,7 @@
 #include <Arduino.h>
 #include <TFT_eSPI.h> // Graphics and font library for ST7735 driver chip
 #include <SPI.h>
+#include <snake.h>
 
 //////////////////////////////// Macros ////////////////////////////////
 
@@ -21,7 +22,7 @@
 static uint8_t conv2d(const char* p);
 static uint16_t trigger_level = 3584;
 uint16_t samples[BUF_LEN];
-size_t write_head = 0; 
+size_t write_head = 0;
 size_t read_head = 0;
 
 //////////////////////////////// Types /////////////////////////////////
@@ -217,23 +218,23 @@ void add_sample(uint16_t v) {
 }
 
 void sensor_generator(uint16_t& sensor_reading, bool& adding) {
-	uint16_t incrementer = random(20, 100);                                
-	if (random(0,10) > 8) {                                                
-		incrementer = incrementer * 3;                                       
-	}                                                                      
-	uint16_t temp = sensor_reading + incrementer;                          
-	if (adding) {                                                          
-		temp = sensor_reading + incrementer;                                 
-		if (temp > 3396) {                                                   
-			adding = false;                                                    
-		}                                                                    
-	} else if (!adding) {                                                  
-		temp = sensor_reading - incrementer;                                 
-		if (temp < 600) {                                                    
-			adding = true;                                                     
-		}                                                                    
-	}                                                                      
-	sensor_reading = temp; 
+	uint16_t incrementer = random(20, 100);
+	if (random(0,10) > 8) {
+		incrementer = incrementer * 3;
+	}
+	uint16_t temp = sensor_reading + incrementer;
+	if (adding) {
+		temp = sensor_reading + incrementer;
+		if (temp > 3396) {
+			adding = false;
+		}
+	} else if (!adding) {
+		temp = sensor_reading - incrementer;
+		if (temp < 600) {
+			adding = true;
+		}
+	}
+	sensor_reading = temp;
 }
 
 void sensor_task(void *pvParameters) {
@@ -254,16 +255,21 @@ void setup() {
   tft.setRotation(1); // Set screen rotation
   tft.fillScreen(TFT_BLACK); // Fill screen black background
   tft.setTextColor(TFT_YELLOW, TFT_BLACK); // setTextColor(fg,bg)
-  memset(samples, 64, sizeof(samples));
 
   // Create FreeRTOS tasks
-//  xTaskCreate(blink_task, "Blink Task", 1024, NULL, 1, NULL);
-//  xTaskCreate(serial_task, "Serial Task", 1024, NULL, 1, NULL);
-//  xTaskCreate(screen_task, "Screen Task", 1024, NULL, 1, NULL);
-//  xTaskCreate(clock_task, "Clock Task", 1024, NULL, 1, NULL);
-//  xTaskCreate(adc_task, "ADC Task", 1024, NULL, 1, NULL);
-  xTaskCreate(ui_task, "UI", 4096, NULL, 1, NULL);
-  xTaskCreate(sensor_task, "Sensor", 4096, NULL, 1, NULL);
+
+  // Example tasks
+  //xTaskCreate(blink_task, "Blink Task", 1024, NULL, 1, NULL);
+  //xTaskCreate(serial_task, "Serial Task", 1024, NULL, 1, NULL);
+  //xTaskCreate(screen_task, "Screen Task", 1024, NULL, 1, NULL);
+  //xTaskCreate(clock_task, "Clock Task", 1024, NULL, 1, NULL);
+  //xTaskCreate(adc_task, "ADC Task", 1024, NULL, 1, NULL);
+  xTaskCreate(snake_task,"Snake Task",16384,NULL,1,NULL);
+
+  // Sensor tasks
+  //memset(samples, 64, sizeof(samples));
+  //xTaskCreate(ui_task, "UI", 4096, NULL, 1, NULL);
+  //xTaskCreate(sensor_task, "Sensor", 4096, NULL, 1, NULL);
 }
 
 void loop() {
