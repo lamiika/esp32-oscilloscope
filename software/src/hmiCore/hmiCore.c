@@ -41,11 +41,11 @@
 #define DEFAULT_HOLD_SAMPLES            200  
 #define DEFAULT_HOLD_RELEASE_SAMPLES    10
 
-#define setHigh(x)              digitalWrite(x, HIGH)
-#define setLow(x)               digitalWrite(x, LOW)
-#define read(x)                 digitalRead(x)
-#define delay_us(x)             delayMicroseconds(x)
-#define delay_ms(x)             delay(x)
+#define setHigh(x)              gpio_set_level((gpio_num_t)x, 1)
+#define setLow(x)               gpio_set_level((gpio_num_t)x, 0)
+#define read(x)                 gpio_get_level((gpio_num_t)x)
+#define delay_us(x)             //ets_delay_us(x)
+#define delay_ms(x)             //vTaskDelay(pdMS_TO_TICKS(x))
 
 #define clkPulse(x)             do{\
                                     setHigh(CLK);\
@@ -71,6 +71,14 @@
 
 typedef enum
 {
+    ENC_S1 = 0,
+    ENC_S2 = 1,
+    ENC_S3 = 3,
+    ENC_S4 = 2
+} encoderState_t;
+
+typedef enum
+{
     STATUS_CLEAR,
     STATUS_HOLD,
 } inputStatus_t;
@@ -79,6 +87,12 @@ typedef struct
 {
     // Last sample taken from inputs
     uint32_t sample;
+
+    struct
+    {
+        encoderState_t newState;
+        encoderState_t oldState; 
+    } enc;
 
     // How many consecutive samples need to be 
     // ones so that input is considered pressed
@@ -117,6 +131,11 @@ typedef struct
 static hmiCore_t hmiCore = 
 {
     .sample = 0,
+    .enc =
+    {
+        .newState = ENC_S1,
+        .oldState = ENC_S2
+    },
     .pressedSamples = DEFAULT_PRESSED_SAMPLES,
     .holdSamples = DEFAULT_HOLD_SAMPLES,
     .holdReleaseSamples = DEFAULT_HOLD_RELEASE_SAMPLES,
@@ -145,14 +164,32 @@ void hmiCore_init( uint32_t pressThresholdMs, uint32_t holdThresholdMs,
         hmiCore.holdReleaseSamples = holdReleaseThresholdMs; 
     }
 
-    pinMode(PL, OUTPUT);
-    pinMode(CLK, OUTPUT);
-    pinMode(ROW_SEL, OUTPUT);
-    pinMode(DATA_OUT, INPUT);
+    // Configure output pins
+    gpio_config_t outputConfig = {
+        .pin_bit_mask = (1ULL << PL) | (1ULL << CLK) | (1ULL << ROW_SEL),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    esp_err_t err = gpio_config( &outputConfig );
 
-    digitalWrite(PL, HIGH);
-    digitalWrite(CLK, LOW);
-    digitalWrite(ROW_SEL, LOW);
+    // Configure input pins
+    gpio_config_t inputConfig = {
+        .pin_bit_mask = (1ULL << DATA_OUT) | (1ULL << ENC_A) | (1ULL << ENC_B),
+        .mode = GPIO_MODE_INPUT,
+    };
+    gpio_config( &inputConfig );
+
+    // Was not able to use esp idf to set ROW_SEL as output even after 
+    // trying to reset the pin config, disabling rtc and adc on the pin etc
+    pinMode( ROW_SEL, OUTPUT );
+
+    setHigh(PL);
+    setLow(CLK);
+    setLow(ROW_SEL);
+
+    hmiCore.enc.oldState = (encoderState_t)(read(ENC_B) << 1 | read(ENC_A));
 
     xTaskCreate( hmiHandler, "HMI_HANDLER", 4096, NULL, 
                  tskIDLE_PRIORITY, &hmiCore.handle );
@@ -339,11 +376,53 @@ LOCAL void hmiHandler( void * pvParameters )
         // Read new sample
         hmiCore.sample = scanKeyboard();
 
-        // Detect events for each input
+        // Detect events for each input ( encoder excluded )
         for( uint32_t i = 0; i < NUMBER_OF_INPUTS; i++ )
         {
             hmiEvent_t e = detectEvent(i);
             inputEvents[e] |= (1 << i);
+        }
+
+        // encoder
+        hmiCore.enc.newState = (encoderState_t)(read(ENC_B) << 1 | read(ENC_A));
+
+        if( hmiCore.enc.newState != hmiCore.enc.oldState )
+        {
+            encoderState_t next, last;
+
+            switch( hmiCore.enc.newState )
+            {
+                case ENC_S1:
+                    next = ENC_S2;
+                    last = ENC_S4;
+                    break;
+
+                case ENC_S2:
+                    next = ENC_S3;
+                    last = ENC_S1;
+                    break;
+                
+                case ENC_S3:
+                    next = ENC_S4;
+                    last = ENC_S2;
+                    break;
+                
+                case ENC_S4:
+                    next = ENC_S1;
+                    last = ENC_S3;
+                    break;
+            }
+
+            if( hmiCore.enc.oldState == last )
+            {
+              inputEvents[E_TURNED_CW] = (1 << 16);  
+            } 
+            else if( hmiCore.enc.oldState == next )
+            {
+                inputEvents[E_TURNED_CCW] = (1 << 16);
+            }
+
+            hmiCore.enc.oldState = hmiCore.enc.newState;
         }
 
         if( hmiCore.callback != NULL )
@@ -363,5 +442,7 @@ LOCAL void hmiHandler( void * pvParameters )
                 }
             }
         }
+
+        
     }
 }

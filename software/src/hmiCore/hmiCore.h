@@ -33,6 +33,10 @@
 #define CLK         2
 #define ROW_SEL     32
 
+// Pin numbers for encoder
+#define ENC_A       38
+#define ENC_B       39
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -60,15 +64,25 @@ typedef struct
     extern "C" {
 #endif
 
+// Initializes the hmiCore (hmiCore uses hardware timer1 internally, 
+// also creates a freertos task). The threshold parameters tell how many 
+// milliseconds the input needs to be present or absent before the given 
+// event is triggered.
 extern void hmiCore_init( uint32_t pressThresholdMs, uint32_t holdThresholdMs, 
                           uint32_t holdReleaseThresholdMs );
 
+// Deinitializes the hmiCore ( pauses the hardware timer used and 
+// removes the freertos task used to implement all of the functionality )
 extern void hmiCore_deinit(void);
 
 // you should not take a semaphore in the callback or update the screen etc...
 // only change a value of a variable or a status etc...
+//
+// Initializes the callback, which is used to get the event data from hmiCore
 extern void hmiCore_attachEventCallback( void (*callback)(hmiEventData_t e) );
 
+// Returns true if the given input and event are found within 
+// the given hmiEventData_t stuct. 
 extern bool hmiCore_eventFound( hmiEventData_t e, hmiEvent_t event, 
                                 uint32_t input );
 
