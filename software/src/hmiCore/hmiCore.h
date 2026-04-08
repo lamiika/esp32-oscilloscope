@@ -17,6 +17,9 @@
     25.02.2026 JR   
         - Library created
 
+    08.04.2026 JR
+        - hmiCore_init() now returns QueueHandle_t instead of void
+
 */
 
 #ifndef HMI_CORE_H
@@ -24,6 +27,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/queue.h>
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -68,16 +75,17 @@ typedef struct
 // also creates a freertos task). The threshold parameters tell how many 
 // milliseconds the input needs to be present or absent before the given 
 // event is triggered.
-extern void hmiCore_init( uint32_t pressThresholdMs, uint32_t holdThresholdMs, 
-                          uint32_t holdReleaseThresholdMs );
+//
+// Returns a handle to a FreeRTOS queue which can be used to read event data
+// instead of a callback
+extern QueueHandle_t hmiCore_init( uint32_t pressThresholdMs, 
+                                   uint32_t holdThresholdMs, 
+                                   uint32_t holdReleaseThresholdMs );
 
 // Deinitializes the hmiCore ( pauses the hardware timer used and 
 // removes the freertos task used to implement all of the functionality )
 extern void hmiCore_deinit(void);
 
-// you should not take a semaphore in the callback or update the screen etc...
-// only change a value of a variable or a status etc...
-//
 // Initializes the callback, which is used to get the event data from hmiCore
 extern void hmiCore_attachEventCallback( void (*callback)(hmiEventData_t e) );
 

@@ -17,17 +17,18 @@
     25.02.2026 JR   
         - Library created
 
+    08.04.2026 JR
+        - Hardware timer code removed and replaced with FreeRTOS APIs
+        - hmiCore_init() now returns QueueHandle_t instead of void
+        - Added the ability to receive event data through FreeRTOS queue
+
 */
 
 #include "hmiCore.h"
 
+// only used because was unable to set 
+// ROW_SEL as output with esp idf api
 #include <Arduino.h>
-
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-
-// esp32 hardware timers
-#include "driver/timer.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -109,6 +110,9 @@ typedef struct
     // Freertos task handle for hmiHandler
     TaskHandle_t handle;
 
+    // Freertos queue handle for events
+    QueueHandle_t xEventQueue;
+
     // Callback used to dispatch hmi events
     void (*callback)(hmiEventData_t e);
 
@@ -140,22 +144,28 @@ static hmiCore_t hmiCore =
     .holdSamples = DEFAULT_HOLD_SAMPLES,
     .holdReleaseSamples = DEFAULT_HOLD_RELEASE_SAMPLES,
     .handle = 0,
+    .xEventQueue = 0,
     .callback = NULL
 }; 
 
 static hmiInput_t inputs[NUMBER_OF_INPUTS] = {};
 
+// Event queue
+#define QUEUE_LENGTH        100
+#define QUEUE_ITEM_SIZE     sizeof( hmiEventData_t )
+static StaticQueue_t xStaticQueue;
+uint8_t ucQueueStorageArea[ QUEUE_LENGTH * QUEUE_ITEM_SIZE ];
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
 LOCAL void hmiHandler( void * pvParameters );
-static void IRAM_ATTR timer_isr( void *arg );
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-void hmiCore_init( uint32_t pressThresholdMs, uint32_t holdThresholdMs, 
-                   uint32_t holdReleaseThresholdMs )
+QueueHandle_t hmiCore_init( uint32_t pressThresholdMs, uint32_t holdThresholdMs, 
+                            uint32_t holdReleaseThresholdMs )
 {
     if( pressThresholdMs != 0 ) { hmiCore.pressedSamples = pressThresholdMs; }
     if( holdThresholdMs != 0 )  { hmiCore.holdSamples = holdThresholdMs; }
@@ -189,37 +199,18 @@ void hmiCore_init( uint32_t pressThresholdMs, uint32_t holdThresholdMs,
     setLow(CLK);
     setLow(ROW_SEL);
 
+    // Initialize encoder state without creating event
     hmiCore.enc.oldState = (encoderState_t)(read(ENC_B) << 1 | read(ENC_A));
+
+    hmiCore.xEventQueue = xQueueCreateStatic( QUEUE_LENGTH,
+                                              QUEUE_ITEM_SIZE,
+                                              ucQueueStorageArea,
+                                              &xStaticQueue );
 
     xTaskCreate( hmiHandler, "HMI_HANDLER", 4096, NULL, 
                  tskIDLE_PRIORITY, &hmiCore.handle );
 
-    // (80 MHz / 80) = 1 MHz timer clock + 1000us interval = 1kHz timer
-    static const uint32_t timerDivider = 80;  
-    static const uint32_t timerInterval_us = 1000;
-
-    // Initialize esp32 hardware timer for 1kHz 
-    timer_config_t config = 
-    {
-        .alarm_en = TIMER_ALARM_EN,
-        .counter_en = TIMER_PAUSE,
-        .intr_type = TIMER_INTR_LEVEL,
-        .counter_dir = TIMER_COUNT_UP,
-        .auto_reload = TIMER_AUTORELOAD_EN,
-        .divider = timerDivider
-    };
-
-    timer_init( TIMER_GROUP_1, TIMER_1, &config );
-
-    timer_set_counter_value(TIMER_GROUP_1, TIMER_1, 0 );
-
-    timer_set_alarm_value( TIMER_GROUP_1, TIMER_1, timerInterval_us );
-
-    timer_isr_register( TIMER_GROUP_1, TIMER_1, timer_isr, NULL, 
-                        ESP_INTR_FLAG_IRAM, NULL );
-
-    timer_start( TIMER_GROUP_1, TIMER_1 );
-
+    return hmiCore.xEventQueue;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -227,7 +218,6 @@ void hmiCore_init( uint32_t pressThresholdMs, uint32_t holdThresholdMs,
 
 void hmiCore_deinit(void)
 {
-    timer_pause( TIMER_GROUP_1, TIMER_1 );
     vTaskDelete( hmiCore.handle );
 }
 
@@ -341,34 +331,22 @@ LOCAL hmiEvent_t detectEvent( uint32_t inputIndex )
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static void IRAM_ATTR timer_isr( void *arg )
-{
-    // Clear interrupt
-    TIMERG1.int_clr_timers.t1 = 1;
-
-    // Re-enable alarm
-    TIMERG1.hw_timer[TIMER_1].config.alarm_en = TIMER_ALARM_EN;
-
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-
-    // Notify hmiHandler
-    vTaskNotifyGiveFromISR( hmiCore.handle, &xHigherPriorityTaskWoken );
-
-    if( xHigherPriorityTaskWoken ) { portYIELD_FROM_ISR(); }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-
 LOCAL void hmiHandler( void * pvParameters )
 {
-    (void) pvParameters;
+    (void)pvParameters;
+
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    static const TickType_t xTaskTimeout = 1;
 
     for(;;)
     {
         // Blocks execution until a notification is 
         // received from hardware timer based isr
-        ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+        // ( only in use if hardware timer is used )
+        //ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
+
+        // Used to set a constant execution interval for the task
+        (void)xTaskDelayUntil( &xLastWakeTime, pdMS_TO_TICKS( xTaskTimeout ) );
 
         // Store inputs that triggered a given event
         uint32_t inputEvents[E_LAST_EVENT] = {0};
@@ -386,6 +364,7 @@ LOCAL void hmiHandler( void * pvParameters )
         // encoder
         hmiCore.enc.newState = (encoderState_t)(read(ENC_B) << 1 | read(ENC_A));
 
+        // Update encoder state
         if( hmiCore.enc.newState != hmiCore.enc.oldState )
         {
             encoderState_t next, last;
@@ -425,24 +404,27 @@ LOCAL void hmiHandler( void * pvParameters )
             hmiCore.enc.oldState = hmiCore.enc.newState;
         }
 
-        if( hmiCore.callback != NULL )
+        // Call callback with all new events and add events to the queue
+        for( uint32_t e = E_LAST_EVENT - 1; e > E_NONE; e-- )
         {
-            // Call the callback with all new events
-            for( uint32_t e = E_LAST_EVENT - 1; e > E_NONE; e-- )
+            if( inputEvents[e] != 0 ) 
             {
-                if( inputEvents[e] != 0 ) 
-                {
-                    hmiEventData_t event = 
-                    { 
-                        .event = (hmiEvent_t)e, 
-                        .inputs = inputEvents[e],
-                    }; 
+                hmiEventData_t event = 
+                { 
+                    .event = (hmiEvent_t)e, 
+                    .inputs = inputEvents[e],
+                }; 
 
-                    hmiCore.callback(event); 
-                }
+                if( hmiCore.callback != NULL ) { hmiCore.callback(event); } 
+
+                BaseType_t ret = xQueueSendToBack( hmiCore.xEventQueue, 
+                                                   (void*)&event, 0 );
+
+                // If queue full, break out of the loop
+                if( ret != pdPASS ) { break; }
+
             }
         }
 
-        
     }
 }
