@@ -28,7 +28,7 @@ typedef struct {
 
 //////////////////////////// 4.Declarations ////////////////////////////
 
-Time time;
+Time current_time;
 
 //////////////////////////// 4.1.Variables /////////////////////////////
 //////////////////////////// 4.2.Functions /////////////////////////////
@@ -52,15 +52,15 @@ static uint8_t conv2d(const char* p) {
 
 void time_task(void* pvParameter) {
   while (true) {
-    time.ss++; // increment second
-    if ( time.ss > 59 ) {
-      time.ss = 0;
-      time.mm++; // increment minute
-      if( time.mm > 59 ) {
-        time.mm = 0;
-        time.hh++; // increment hour
-        if( time.hh > 23 ) {
-          time.hh = 0;
+    current_time.ss++; // increment second
+    if ( current_time.ss > 59 ) {
+      current_time.ss = 0;
+      current_time.mm++; // increment minute
+      if( current_time.mm > 59 ) {
+        current_time.mm = 0;
+        current_time.hh++; // increment hour
+        if( current_time.hh > 23 ) {
+          current_time.hh = 0;
         }
       }
     }

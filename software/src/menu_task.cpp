@@ -41,7 +41,7 @@ void menu_task(void* pvParameter) {
 
     tft.drawCentreString(__DATE__,120,24,2); // drawCentreString(string,x,y,font_px_size)
     tft.drawCentreString(msg[i],120,48,2); // drawCentreString(string,x,y,font_px_size)
-    tft.drawCentreString(str.c_str(),120,72,2); // drawCentreString(string,x,y,font_px_size)
+//    tft.drawCentreString(str.c_str(),120,72,2); // drawCentreString(string,x,y,font_px_size)
 
     vTaskDelay(REFRESH_RATE_MS / portTICK_PERIOD_MS); // wait
 
