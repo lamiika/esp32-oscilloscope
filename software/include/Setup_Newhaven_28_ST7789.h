@@ -17,10 +17,10 @@
 // ----------------------------------------------------
 // Pin Mapping (LilyGO T-Display external)
 // ----------------------------------------------------
-#define TFT_MOSI  13 
-#define TFT_SCLK  12      
-#define TFT_CS    15      
-#define TFT_DC    27      
+#define TFT_MOSI  13
+#define TFT_SCLK  12
+#define TFT_CS    15
+#define TFT_DC    27
 
 // ----------------------------------------------------
 // SPI Settings

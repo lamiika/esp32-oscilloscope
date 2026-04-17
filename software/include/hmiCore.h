@@ -2,7 +2,7 @@
  * File:        hmiCore.h
  * Author:      Juho Rantsi
  * Created:     25.02.2026
- * Description: 
+ * Description:
         hmiCore is a library / module for all custom human interface inputs that
         are needed in esp32-oscilloscope project. E.g buttons, encoders etc...
  *
@@ -11,10 +11,10 @@
  *
  *******************************************************************************
  *******************************************************************************
- 
+
  Version history:
- 
-    25.02.2026 JR   
+
+    25.02.2026 JR
         - Library created
 
     08.04.2026 JR
@@ -35,7 +35,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 // Pin numbers for keyboard scanner
-#define PL          22     
+#define PL          22
 #define DATA_OUT    36
 #define CLK         2
 #define ROW_SEL     32
@@ -71,27 +71,27 @@ typedef struct
     extern "C" {
 #endif
 
-// Initializes the hmiCore (hmiCore uses hardware timer1 internally, 
-// also creates a freertos task). The threshold parameters tell how many 
-// milliseconds the input needs to be present or absent before the given 
+// Initializes the hmiCore (hmiCore uses hardware timer1 internally,
+// also creates a freertos task). The threshold parameters tell how many
+// milliseconds the input needs to be present or absent before the given
 // event is triggered.
 //
 // Returns a handle to a FreeRTOS queue which can be used to read event data
 // instead of a callback
-extern QueueHandle_t hmiCore_init( uint32_t pressThresholdMs, 
-                                   uint32_t holdThresholdMs, 
+extern QueueHandle_t hmiCore_init( uint32_t pressThresholdMs,
+                                   uint32_t holdThresholdMs,
                                    uint32_t holdReleaseThresholdMs );
 
-// Deinitializes the hmiCore ( pauses the hardware timer used and 
+// Deinitializes the hmiCore ( pauses the hardware timer used and
 // removes the freertos task used to implement all of the functionality )
 extern void hmiCore_deinit(void);
 
 // Initializes the callback, which is used to get the event data from hmiCore
 extern void hmiCore_attachEventCallback( void (*callback)(hmiEventData_t e) );
 
-// Returns true if the given input and event are found within 
-// the given hmiEventData_t stuct. 
-extern bool hmiCore_eventFound( hmiEventData_t e, hmiEvent_t event, 
+// Returns true if the given input and event are found within
+// the given hmiEventData_t struct.
+extern bool hmiCore_eventFound( hmiEventData_t e, hmiEvent_t event,
                                 uint32_t input );
 
 #ifdef __cplusplus

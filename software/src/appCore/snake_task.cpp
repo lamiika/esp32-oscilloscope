@@ -7,7 +7,11 @@
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <SPI.h>
-#include <device_macros.h>
+
+#define TFT_DISPLAY
+#include <esp32-oscilloscope.h>
+
+#include <hmiCore.h>
 
 /////////////////////////////// 2.Macros ///////////////////////////////
 
@@ -66,9 +70,16 @@ typedef struct {
 //////////////////////////// 4.1.Variables /////////////////////////////
 
 extern TFT_eSPI tft;
+extern SemaphoreHandle_t screen_mutex;
 
 //////////////////////////// 4.2.Functions /////////////////////////////
+
+extern void reset();
+
 //////////////////////////// 5.Definitions /////////////////////////////
+
+static QueueHandle_t *q = nullptr;
+
 //////////////////////////// 5.1.Variables /////////////////////////////
 //////////////////////////// 5.2.Functions /////////////////////////////
 
@@ -145,24 +156,26 @@ static void rmTail(Tail& tail, Grid grid){
 }
 
 static Direction getDir(Direction dir){
-  bool left = digitalRead(BUTTON_LEFT) ? false : true;
-  bool right = digitalRead(BUTTON_RIGHT) ? false : true;
+
+  hmiEventData_t data;
+  uint32_t& inputs = data.inputs;
+  inputs = 0;
+  if (xQueueReceive(*q, &data, pdMS_TO_TICKS(100)) == pdTRUE){
+    xQueueReset(*q); // reset queue
+  }
 
   switch(dir){
-  case UP:
-    dir = left && right ? dir : right ? RIGHT : left ? LEFT : dir;
-    break;
-  case DOWN:
-    dir = left && right ? dir : right ? LEFT : left ? RIGHT : dir;
-    break;
-  case LEFT:
-    dir = left && right ? dir : right ? UP : left ? DOWN : dir;
-    break;
-  case RIGHT:
-    dir = left && right ? dir : right ? DOWN : left ? UP : dir;
-    break;
+  case UP: case DOWN:
+    dir = inputs & BTN_LEFT ? LEFT :
+      inputs & BTN_RIGHT ? RIGHT : dir;
+      break;
+  case LEFT: case RIGHT:
+    dir = inputs & BTN_UP ? UP :
+        inputs & BTN_DOWN ? DOWN : dir;
+        break;
   default: break;
   }
+
   return dir;
 }
 
@@ -206,11 +219,15 @@ static Game evalSnake(Snake& snake, Grid grid){
 
 void snake_task(void* pvParameter){
 
-  tft.setRotation(1); // Set screen rotation
-  tft.fillScreen(TFT_BLACK); // Fill screen black background
+  q = (QueueHandle_t *) pvParameter;
 
-  pinMode(BUTTON_LEFT,INPUT_PULLUP);
-  pinMode(BUTTON_RIGHT,INPUT_PULLUP);
+  if(q = nullptr){
+    tft.drawCentreString("No queue found",RESOLUTION_X/2,RESOLUTION_Y/2,1);
+    DELAY(2500);
+    return;
+  }
+
+  reset();
 
   Grid grid;
   for(Index y=0; y < GRID_COUNT_Y;y++)
@@ -227,16 +244,34 @@ void snake_task(void* pvParameter){
   grid[snake.head.x][snake.head.y] = SNAKE; // seed snake
   placeApple(grid); // seed apple
   drawSnake(grid); // draw screen
-  vTaskDelay(REFRESH_RATE_MS / portTICK_PERIOD_MS); // wait
+  DELAY(REFRESH_RATE_MS); // wait
 
-  while(true){
-    snake.dir = getDir(snake.dir); // read direction
-    snake.status = evalSnake(snake, grid); // eval snake movement
-    drawSnake(grid); // draw screen
-    if( snake.status != UNKNOWN ){
-      break;
+  // attempt to take mutex
+  if (xSemaphoreTake(screen_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+
+    while(true){
+      snake.dir = getDir(snake.dir); // read direction
+      snake.status = evalSnake(snake, grid); // eval snake movement
+      drawSnake(grid); // draw screen
+      if( snake.status != UNKNOWN ){
+        break;
+      }
+      DELAY(REFRESH_RATE_MS); // wait
     }
-    vTaskDelay(REFRESH_RATE_MS / portTICK_PERIOD_MS); // wait
+
+    char* msg;
+    switch(snake.status){
+    case WIN: msg = (char*)"YOU WON"; break;
+    case LOSE: msg = (char*)"YOU DIED"; break;
+    default: msg = (char*)"YOU HACKED"; break;
+    }
+    tft.drawCentreString(msg,RESOLUTION_X/2,RESOLUTION_Y/2,1);
+
+    DELAY(2500); // wait
+
+    xSemaphoreGive(screen_mutex); // release mutex
   }
-  // do something with snake.status here
+
+  q = nullptr;
+
 }

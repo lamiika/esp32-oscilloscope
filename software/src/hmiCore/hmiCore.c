@@ -2,7 +2,7 @@
  * File:        hmiCore.h
  * Author:      Juho Rantsi
  * Created:     25.02.2026
- * Description: 
+ * Description:
         hmiCore is a library / module for all custom human interface inputs that
         are needed in esp32-oscilloscope project. E.g buttons, encoders etc...
  *
@@ -11,10 +11,10 @@
  *
  *******************************************************************************
  *******************************************************************************
- 
+
  Version history:
- 
-    25.02.2026 JR   
+
+    25.02.2026 JR
         - Library created
 
     08.04.2026 JR
@@ -24,22 +24,22 @@
 
 */
 
-#include "hmiCore.h"
+#include <hmiCore.h>
 
-// only used because was unable to set 
+// only used because was unable to set
 // ROW_SEL as output with esp idf api
 #include <Arduino.h>
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-#define LOCAL                   static inline  
+#define LOCAL                   static inline
 
 // Number of user inputs present
 #define NUMBER_OF_INPUTS        16
 
 #define DEFAULT_PRESSED_SAMPLES         10
-#define DEFAULT_HOLD_SAMPLES            200  
+#define DEFAULT_HOLD_SAMPLES            200
 #define DEFAULT_HOLD_RELEASE_SAMPLES    10
 
 #define setHigh(x)              gpio_set_level((gpio_num_t)x, 1)
@@ -84,7 +84,7 @@ typedef enum
     STATUS_HOLD,
 } inputStatus_t;
 
-typedef struct 
+typedef struct
 {
     // Last sample taken from inputs
     uint32_t sample;
@@ -92,18 +92,18 @@ typedef struct
     struct
     {
         encoderState_t newState;
-        encoderState_t oldState; 
+        encoderState_t oldState;
     } enc;
 
-    // How many consecutive samples need to be 
+    // How many consecutive samples need to be
     // ones so that input is considered pressed
     uint32_t pressedSamples;
-    
-    // How many consecutive samples need to be 
+
+    // How many consecutive samples need to be
     // ones for hold to be triggered
     uint32_t holdSamples;
 
-    // How many consecutive samples need to be 
+    // How many consecutive samples need to be
     // zeroes for hold release to be triggered
     uint32_t holdReleaseSamples;
 
@@ -132,7 +132,7 @@ typedef struct
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static hmiCore_t hmiCore = 
+static hmiCore_t hmiCore =
 {
     .sample = 0,
     .enc =
@@ -146,7 +146,7 @@ static hmiCore_t hmiCore =
     .handle = 0,
     .xEventQueue = 0,
     .callback = NULL
-}; 
+};
 
 static hmiInput_t inputs[NUMBER_OF_INPUTS] = {};
 
@@ -164,14 +164,14 @@ LOCAL void hmiHandler( void * pvParameters );
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-QueueHandle_t hmiCore_init( uint32_t pressThresholdMs, uint32_t holdThresholdMs, 
+QueueHandle_t hmiCore_init( uint32_t pressThresholdMs, uint32_t holdThresholdMs,
                             uint32_t holdReleaseThresholdMs )
 {
     if( pressThresholdMs != 0 ) { hmiCore.pressedSamples = pressThresholdMs; }
     if( holdThresholdMs != 0 )  { hmiCore.holdSamples = holdThresholdMs; }
-    if( holdReleaseThresholdMs != 0 ) 
-    { 
-        hmiCore.holdReleaseSamples = holdReleaseThresholdMs; 
+    if( holdReleaseThresholdMs != 0 )
+    {
+        hmiCore.holdReleaseSamples = holdReleaseThresholdMs;
     }
 
     // Configure output pins
@@ -191,7 +191,7 @@ QueueHandle_t hmiCore_init( uint32_t pressThresholdMs, uint32_t holdThresholdMs,
     };
     gpio_config( &inputConfig );
 
-    // Was not able to use esp idf to set ROW_SEL as output even after 
+    // Was not able to use esp idf to set ROW_SEL as output even after
     // trying to reset the pin config, disabling rtc and adc on the pin etc
     pinMode( ROW_SEL, OUTPUT );
 
@@ -207,7 +207,7 @@ QueueHandle_t hmiCore_init( uint32_t pressThresholdMs, uint32_t holdThresholdMs,
                                               ucQueueStorageArea,
                                               &xStaticQueue );
 
-    xTaskCreate( hmiHandler, "HMI_HANDLER", 4096, NULL, 
+    xTaskCreate( hmiHandler, "HMI_HANDLER", 4096, NULL,
                  tskIDLE_PRIORITY, &hmiCore.handle );
 
     return hmiCore.xEventQueue;
@@ -232,7 +232,7 @@ void hmiCore_attachEventCallback( void (*callback)(hmiEventData_t e) )
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-inline bool hmiCore_eventFound( hmiEventData_t e, hmiEvent_t event, 
+inline bool hmiCore_eventFound( hmiEventData_t e, hmiEvent_t event,
                                 uint32_t input )
 {
     if( e.event == event )
@@ -292,11 +292,11 @@ LOCAL hmiEvent_t detectEvent( uint32_t inputIndex )
         input->c1++;
     }
     else
-    { 
-        input->c0++; 
+    {
+        input->c0++;
 
         // Handle press
-        if( input->c1 >= hmiCore.pressedSamples 
+        if( input->c1 >= hmiCore.pressedSamples
         &&  input->status == STATUS_CLEAR )
         {
             input->c1 = 0;
@@ -340,7 +340,7 @@ LOCAL void hmiHandler( void * pvParameters )
 
     for(;;)
     {
-        // Blocks execution until a notification is 
+        // Blocks execution until a notification is
         // received from hardware timer based isr
         // ( only in use if hardware timer is used )
         //ulTaskNotifyTake( pdTRUE, portMAX_DELAY );
@@ -380,12 +380,12 @@ LOCAL void hmiHandler( void * pvParameters )
                     next = ENC_S3;
                     last = ENC_S1;
                     break;
-                
+
                 case ENC_S3:
                     next = ENC_S4;
                     last = ENC_S2;
                     break;
-                
+
                 case ENC_S4:
                     next = ENC_S1;
                     last = ENC_S3;
@@ -394,8 +394,8 @@ LOCAL void hmiHandler( void * pvParameters )
 
             if( hmiCore.enc.oldState == last )
             {
-              inputEvents[E_TURNED_CW] = (1 << 16);  
-            } 
+              inputEvents[E_TURNED_CW] = (1 << 16);
+            }
             else if( hmiCore.enc.oldState == next )
             {
                 inputEvents[E_TURNED_CCW] = (1 << 16);
@@ -407,17 +407,17 @@ LOCAL void hmiHandler( void * pvParameters )
         // Call callback with all new events and add events to the queue
         for( uint32_t e = E_LAST_EVENT - 1; e > E_NONE; e-- )
         {
-            if( inputEvents[e] != 0 ) 
+            if( inputEvents[e] != 0 )
             {
-                hmiEventData_t event = 
-                { 
-                    .event = (hmiEvent_t)e, 
+                hmiEventData_t event =
+                {
+                    .event = (hmiEvent_t)e,
                     .inputs = inputEvents[e],
-                }; 
+                };
 
-                if( hmiCore.callback != NULL ) { hmiCore.callback(event); } 
+                if( hmiCore.callback != NULL ) { hmiCore.callback(event); }
 
-                BaseType_t ret = xQueueSendToBack( hmiCore.xEventQueue, 
+                BaseType_t ret = xQueueSendToBack( hmiCore.xEventQueue,
                                                    (void*)&event, 0 );
 
                 // If queue full, break out of the loop

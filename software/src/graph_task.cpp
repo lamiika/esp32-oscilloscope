@@ -6,7 +6,7 @@
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <SPI.h>
-#include <device_macros.h>
+#include <esp32-oscilloscope.h>
 
 /////////////////////////////// 2.Macros ///////////////////////////////
 
