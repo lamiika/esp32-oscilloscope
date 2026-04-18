@@ -3,7 +3,7 @@
 // Serial task
 ///////////////////////////// 1.Libraries //////////////////////////////
 
-#include <Arduino.h>
+#include <esp32-oscilloscope.h>
 
 /////////////////////////////// 2.Macros ///////////////////////////////
 
@@ -17,9 +17,29 @@
 //////////////////////////// 5.1.Variables /////////////////////////////
 //////////////////////////// 5.2.Functions /////////////////////////////
 
+static void serial_init(){
+  #ifdef DEBUG
+  Serial.println("[serial_task]: launched");
+  #endif
+}
+
+static void serial_deinit(){
+  #ifdef DEBUG
+  Serial.println("[serial_task]: self-deleting");
+  #endif
+  vTaskDelete(NULL); // self-delete
+}
+
 void serial_task(void* pvParameter) {
+
+  serial_init();
+
   while (true) {
     Serial.println("FreeRTOS: Hello World!");
-    vTaskDelay(REFRESH_RATE_MS / portTICK_PERIOD_MS); // wait
+
+    DELAY(REFRESH_RATE_MS);
   }
+
+  serial_deinit();
+
 }

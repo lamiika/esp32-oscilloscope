@@ -3,14 +3,9 @@
 // Menu task
 ///////////////////////////// 1.Libraries //////////////////////////////
 
-#include <Arduino.h>
-#include <TFT_eSPI.h>
-#include <SPI.h>
-
-#define TFT_DISPLAY
 #include <esp32-oscilloscope.h>
-
 #include <hmiCore.h>
+
 #include "snake_task.h"
 #include "graph_task.h"
 
@@ -122,7 +117,7 @@ void loop(void) {
     hmiEventData_t data = {};
     uint32_t& inputs = data.inputs;
 
-    if (xSemaphoreTake(inputs_mutex,0) == pdTRUE) {
+    if (xSemaphoreTake(inputs_mutex,pdMS_TO_TICKS(100)) == pdTRUE) {
       data = getinputs(q);
       xSemaphoreGive(inputs_mutex);
     }

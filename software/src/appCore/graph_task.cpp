@@ -6,7 +6,6 @@
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <SPI.h>
-#define TFT_DISPLAY
 #include <esp32-oscilloscope.h>
 #include <driver/adc.h>
 
@@ -23,9 +22,6 @@
 /////////////////////////////// 3.Types ////////////////////////////////
 //////////////////////////// 4.Declarations ////////////////////////////
 //////////////////////////// 4.1.Variables /////////////////////////////
-
-extern TFT_eSPI tft;
-
 //////////////////////////// 4.2.Functions /////////////////////////////
 //////////////////////////// 5.Definitions /////////////////////////////
 //////////////////////////// 5.1.Variables /////////////////////////////
@@ -97,21 +93,31 @@ void draw_grid() {
 
 void ui_task(void *pvParameters) {
 	uint8_t counter = 0;
+
 	xTaskCreate(adc_task
-		,"ADC"
-		,1024
-		,NULL
-		,1
-		,NULL
-		);
-	while (1) {
-		tft.fillScreen(TFT_BLACK);
-		trigger();
-		draw_grid();
-		draw_graph();
-		draw_trigger();
-		vTaskDelay(pdMS_TO_TICKS(100));
-      Serial.println(samples[write_head]);
+              ,"ADC"
+              ,1024
+              ,NULL
+              ,1
+              ,NULL
+              );
+
+	while (true) {
+
+    if(mutex_take()) {
+
+      while(true) {
+        tft.fillScreen(TFT_BLACK);
+        trigger();
+        draw_grid();
+        draw_graph();
+        draw_trigger();
+        vTaskDelay(pdMS_TO_TICKS(100));
+        Serial.println(samples[write_head]);
+      }
+
+    }
+
 	}
 }
 
@@ -137,18 +143,19 @@ void sensor_generator(uint16_t& sensor_reading, bool& adding) {
 
 void graph_task(void *pvParameters) {
   xTaskCreate(ui_task
-            ,"UI"
-            ,1024
-            ,NULL
-            ,1
-            ,NULL
-            );
+              ,"UI"
+              ,1024
+              ,NULL
+              ,1
+              ,NULL
+              );
 
   xTaskCreate(adc_task
-            ,"ADC"
-            ,1024
-            ,NULL
-            ,1
-            ,NULL
-            );
+              ,"ADC"
+              ,1024
+              ,NULL
+              ,1
+              ,NULL
+              );
+  while(true);
 }

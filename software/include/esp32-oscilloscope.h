@@ -3,6 +3,10 @@
 // Device related macros
 ///////////////////////////// 1.Libraries //////////////////////////////
 
+#include <Arduino.h>
+#include <TFT_eSPI.h> // Graphics and font library for ST7735 driver chip
+#include <SPI.h>
+
 #ifndef ESP32_OSCILLOSCOPE
 #define ESP32_OSCILLOSCOPE
 

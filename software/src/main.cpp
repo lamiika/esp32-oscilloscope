@@ -3,21 +3,10 @@
 // Main program
 ///////////////////////////// 1.Libraries //////////////////////////////
 
-#include <Arduino.h>
-#include <TFT_eSPI.h> // Graphics and font library for ST7735 driver chip
-#include <SPI.h>
-
-#include "appCore/snake_task.h"
-#include "appCore/serial_task.h"
-#include "appCore/time_task.h"
-#include "appCore/menu_task.h"
-
-#include "appCore/graph_task.h"
-
-#define TFT_DISPLAY
 #include <esp32-oscilloscope.h>
-
 #include <hmiCore.h>
+
+#include "appCore/menu_task.h"
 
 /////////////////////////////// 2.Macros ///////////////////////////////
 /////////////////////////////// 3.Types ////////////////////////////////
@@ -35,8 +24,8 @@ SemaphoreHandle_t inputs_mutex = xSemaphoreCreateMutex();
 
 bool mutex_take(){
   return
-    ( xSemaphoreTake(screen_mutex,0) == pdTRUE ) &&
-    ( xSemaphoreTake(inputs_mutex,0) == pdTRUE )
+      ( xSemaphoreTake(screen_mutex,0) == pdTRUE ) &&
+      ( xSemaphoreTake(inputs_mutex,0) == pdTRUE )
     ;
 }
 
@@ -77,7 +66,9 @@ void setup() {
       tft.print("+");
     } else {
       tft.print("|");
-      tft.setCursor(RESOLUTION_X-WIDTH_MEDIUM,ypos);
+      for( int j = 0 ; j < (columns-2) ; j++){
+        tft.print(" ");
+      }
       tft.print("|");
     }
   }

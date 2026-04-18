@@ -4,13 +4,7 @@
 ///////////////////////////// 1.Libraries //////////////////////////////
 
 #include <stdint.h>
-#include <Arduino.h>
-#include <TFT_eSPI.h>
-#include <SPI.h>
-
-#define TFT_DISPLAY
 #include <esp32-oscilloscope.h>
-
 #include <hmiCore.h>
 
 /////////////////////////////// 2.Macros ///////////////////////////////
