@@ -55,35 +55,30 @@ static void info(void* pvParameter){
   QueueHandle_t q = *(QueueHandle_t*)pvParameter;
 
   // attempt to take mutex
+  while(not mutex_take()) DELAY(100);
+
+  reset();
+
+  tft.print("Version: ");
+  tft.println(__DATE__);
+  tft.print("Number of menu items: ");
+  tft.println(items_num);
+
+  // Wait for ESC button press
   while(true){
-    if (mutex_take()){
+    uint32_t inputs = getinputs(q).inputs;
+    if( inputs & BTN_ESC ) break;
+    DELAY(20);
+  }
 
-      reset();
-
-      tft.print("Version: ");
-      tft.println(__DATE__);
-      tft.print("Number of menu items: ");
-      tft.println(items_num);
-
-      // Wait for ESC button press
-      while(true){
-        uint32_t inputs = getinputs(q).inputs;
-        if( inputs & BTN_ESC ) break;
-      }
-
-      mutex_release();
+  mutex_release();
 
 #ifdef DEBUG
-      Serial.println("[info_task]: self-deleting");
+  Serial.println("[info_task]: self-deleting");
 #endif
 
-      vTaskDelete(NULL); // self-delete
-      break;
+  vTaskDelete(NULL); // self-delete
 
-    } else {
-      DELAY(160);
-    }
-  }
 }
 
 static void draw(uint16_t index) {

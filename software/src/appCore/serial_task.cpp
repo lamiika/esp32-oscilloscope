@@ -52,11 +52,16 @@ static funcptr getcmd(String& word){
     }
 
   }
-  Serial.println("[serial_task]: WORD ' " + word + "' WAS NOT FOUND");
+  Serial.println("? '" + word + "'");
   return nullptr;
 }
 
 static String getline(){
+
+  #ifdef DEBUG
+  Serial.println("[func_call]: getline");
+  #endif
+
   bool flag = true;
   String s = "";
   while(flag){
@@ -64,10 +69,11 @@ static String getline(){
       char c = Serial.read();
       switch(c){
       case '\r':
+        Serial.write(c);
+        flag = false;
         break;
       case '\n':
-        Serial.println();
-        flag = false;
+        Serial.write(c);
         break;
       case '\b':
         if (!s.isEmpty()) s.remove(s.length() - 1);
@@ -83,6 +89,11 @@ static String getline(){
     }
     DELAY(20);
   }
+
+  #ifdef DEBUG
+  Serial.println("[func_return]: getline");
+  #endif
+
   return s;
 }
 
@@ -113,8 +124,12 @@ void serial_task(void* pvParameter) {
     String line = getline();
 
     if (line.length()) {
-      line = "[serial_task]: input=" + line;
-      Serial.println(line);
+
+      #ifdef DEBUG
+      String msg = "[serial_task]: input=" + line;
+      Serial.println(msg);
+      #endif
+
       funcptr f = getcmd(line);
       if( f != nullptr ) f();
     }
