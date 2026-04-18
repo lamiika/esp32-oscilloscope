@@ -20,6 +20,8 @@
     08.04.2026 JR
         - hmiCore_init() now returns QueueHandle_t instead of void
 
+    18.04.2026 wawa2024
+       - Added getinput function for queue handling
 */
 
 #ifndef HMI_CORE_H
@@ -93,6 +95,9 @@ extern void hmiCore_attachEventCallback( void (*callback)(hmiEventData_t e) );
 // the given hmiEventData_t struct.
 extern bool hmiCore_eventFound( hmiEventData_t e, hmiEvent_t event,
                                 uint32_t input );
+
+// Reads a hmiEventData_t queue to end, returns last element
+extern hmiEventData_t getinputs(QueueHandle_t q);
 
 #ifdef __cplusplus
 }

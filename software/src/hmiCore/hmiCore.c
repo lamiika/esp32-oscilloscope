@@ -22,6 +22,8 @@
         - hmiCore_init() now returns QueueHandle_t instead of void
         - Added the ability to receive event data through FreeRTOS queue
 
+    18.04.2026 wawa2024
+       - Added getinput function for queue handling
 */
 
 #include <hmiCore.h>
@@ -427,4 +429,11 @@ LOCAL void hmiHandler( void * pvParameters )
         }
 
     }
+}
+
+hmiEventData_t getinputs(QueueHandle_t q){
+  hmiEventData_t data = {E_NONE,0};
+  delay_ms(17); // 60 Hz
+  while(xQueueReceive(q,&data,0) == pdTRUE);
+  return data;
 }

@@ -17,6 +17,8 @@
 #define TFT_DISPLAY
 #include <esp32-oscilloscope.h>
 
+#include <hmiCore.h>
+
 /////////////////////////////// 2.Macros ///////////////////////////////
 /////////////////////////////// 3.Types ////////////////////////////////
 //////////////////////////// 4.Declarations ////////////////////////////
@@ -27,8 +29,23 @@
 
 TFT_eSPI tft = TFT_eSPI();
 SemaphoreHandle_t screen_mutex = xSemaphoreCreateMutex();
+SemaphoreHandle_t inputs_mutex = xSemaphoreCreateMutex();
 
 //////////////////////////// 5.2.Functions /////////////////////////////
+
+bool mutex_take(){
+  return
+    ( xSemaphoreTake(screen_mutex,0) == pdTRUE ) &&
+    ( xSemaphoreTake(inputs_mutex,0) == pdTRUE )
+    ;
+}
+
+bool mutex_release(){
+  return
+    ( xSemaphoreGive(screen_mutex) == pdTRUE ) &&
+    ( xSemaphoreGive(inputs_mutex) == pdTRUE )
+    ;
+}
 
 void reset() {
   tft.setTextFont(1); // GLCD, original Adafruit 8x5 font
@@ -46,19 +63,28 @@ void setup() {
 
   reset();
 
-  for(int i = 0 ; i < 15 ; i++){
-    tft.setCursor(0,i*HEIGHT_MEDIUM);
-    tft.print(">");
-    tft.setCursor(RESOLUTION_X-WIDTH_MEDIUM,i*HEIGHT_MEDIUM);
-    tft.print("<");
+  int columns = (RESOLUTION_X/WIDTH_MEDIUM);
+  int lines = (RESOLUTION_Y/HEIGHT_MEDIUM);
+
+  for(int i = 0 ; i < lines ; i++){
+    int ypos = i * HEIGHT_MEDIUM;
+    tft.setCursor(0,ypos);
+    if ( i == 0 || i == (lines-1) ) {
+      tft.print("+");
+      for( int j = 0 ; j < (columns-2) ; j++){
+        tft.print("-");
+      }
+      tft.print("+");
+    } else {
+      tft.print("|");
+      tft.setCursor(RESOLUTION_X-WIDTH_MEDIUM,ypos);
+      tft.print("|");
+    }
   }
   tft.drawCentreString("SETUP BOOTED",RESOLUTION_X/2,RESOLUTION_Y/2,1);
   // ^drawCentreString(string,x,y,font_px_size)
 
   DELAY(2000);
-  xTaskCreate(menu_task,"Menu",1024,NULL,1,NULL);
 }
 
-void loop() {
-  // Empty, as FreeRTOS is handling everything
-}
+extern void loop(); // menu_task

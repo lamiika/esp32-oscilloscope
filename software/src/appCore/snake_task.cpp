@@ -69,16 +69,13 @@ typedef struct {
 //////////////////////////// 4.Declarations ////////////////////////////
 //////////////////////////// 4.1.Variables /////////////////////////////
 
-extern TFT_eSPI tft;
-extern SemaphoreHandle_t screen_mutex;
-
 //////////////////////////// 4.2.Functions /////////////////////////////
 
-extern void reset();
+static void snake_deinit();
 
 //////////////////////////// 5.Definitions /////////////////////////////
 
-static QueueHandle_t *q = nullptr;
+static QueueHandle_t q = NULL;
 
 //////////////////////////// 5.1.Variables /////////////////////////////
 //////////////////////////// 5.2.Functions /////////////////////////////
@@ -157,12 +154,10 @@ static void rmTail(Tail& tail, Grid grid){
 
 static Direction getDir(Direction dir){
 
-  hmiEventData_t data;
+  hmiEventData_t data = getinputs(q);
   uint32_t& inputs = data.inputs;
-  inputs = 0;
-  if (xQueueReceive(*q, &data, pdMS_TO_TICKS(100)) == pdTRUE){
-    xQueueReset(*q); // reset queue
-  }
+
+  if( inputs & BTN_ESC ) snake_deinit();
 
   switch(dir){
   case UP: case DOWN:
@@ -217,61 +212,84 @@ static Game evalSnake(Snake& snake, Grid grid){
   return UNKNOWN;
 }
 
+static void snake_deinit(){
+
+  #ifdef DEBUG
+  Serial.println("[snake_task]: self-deleting");
+  #endif
+
+  mutex_release();
+
+  vTaskDelete(NULL); // self-delete
+
+}
+
 void snake_task(void* pvParameter){
 
-  q = (QueueHandle_t *) pvParameter;
+  #ifdef DEBUG
+  Serial.println("[snake_task]: launched");
+  #endif
 
-  if(q = nullptr){
-    tft.drawCentreString("No queue found",RESOLUTION_X/2,RESOLUTION_Y/2,1);
-    DELAY(2500);
+  q = *(QueueHandle_t*)pvParameter;
+
+  if(q == NULL){
+    snake_deinit();
     return;
   }
 
-  reset();
+  while(true){
+    // attempt to take mutex
+    if (mutex_take()) {
 
-  Grid grid;
-  for(Index y=0; y < GRID_COUNT_Y;y++)
-    for(Index x=0; x < GRID_COUNT_X;x++)
-      grid[x][y] = EMPTY;
+      reset();
 
-  Snake snake;
-  snake.head.x = random(GRID_COUNT_X);
-  snake.head.y = random(GRID_COUNT_Y);
-  snake.tail = Tail();
-  snake.dir = (Direction)random(4);
-  snake.status = UNKNOWN;
+      Grid grid;
+      for(Index y=0; y < GRID_COUNT_Y;y++)
+        for(Index x=0; x < GRID_COUNT_X;x++)
+          grid[x][y] = EMPTY;
 
-  grid[snake.head.x][snake.head.y] = SNAKE; // seed snake
-  placeApple(grid); // seed apple
-  drawSnake(grid); // draw screen
-  DELAY(REFRESH_RATE_MS); // wait
+      Snake snake;
+      snake.head.x = random(GRID_COUNT_X);
+      snake.head.y = random(GRID_COUNT_Y);
+      snake.tail = Tail();
+      snake.dir = (Direction)random(4);
+      snake.status = UNKNOWN;
 
-  // attempt to take mutex
-  if (xSemaphoreTake(screen_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-
-    while(true){
-      snake.dir = getDir(snake.dir); // read direction
-      snake.status = evalSnake(snake, grid); // eval snake movement
+      grid[snake.head.x][snake.head.y] = SNAKE; // seed snake
+      placeApple(grid); // seed apple
       drawSnake(grid); // draw screen
-      if( snake.status != UNKNOWN ){
-        break;
-      }
       DELAY(REFRESH_RATE_MS); // wait
+
+      while(true){
+        snake.dir = getDir(snake.dir); // read direction
+        snake.status = evalSnake(snake, grid); // eval snake movement
+        drawSnake(grid); // draw screen
+        if( snake.status != UNKNOWN ){
+          break;
+        }
+        DELAY(REFRESH_RATE_MS); // wait
+      }
+
+      // Print message
+      char* msg;
+      switch(snake.status){
+      case WIN: msg = (char*)"YOU WON"; break;
+      case LOSE: msg = (char*)"YOU LOST"; break;
+      }
+      tft.drawCentreString(msg,RESOLUTION_X/2,RESOLUTION_Y/2,1);
+
+      // Wait for ESC button press
+      for(hmiEventData_t data = getinputs(q); !(data.inputs & BTN_ESC); data = getinputs(q));
+
+      break;
+
+    } else {
+      DELAY(160);
     }
-
-    char* msg;
-    switch(snake.status){
-    case WIN: msg = (char*)"YOU WON"; break;
-    case LOSE: msg = (char*)"YOU DIED"; break;
-    default: msg = (char*)"YOU HACKED"; break;
-    }
-    tft.drawCentreString(msg,RESOLUTION_X/2,RESOLUTION_Y/2,1);
-
-    DELAY(2500); // wait
-
-    xSemaphoreGive(screen_mutex); // release mutex
   }
 
-  q = nullptr;
+  q = NULL;
+
+  snake_deinit();
 
 }
