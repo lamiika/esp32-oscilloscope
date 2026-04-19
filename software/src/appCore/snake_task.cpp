@@ -1,6 +1,10 @@
 ////////////////////////////////////////////////////////////////////////
+// SPDX-FileCopyrightText: Copyright © 2026, wawa2024. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0
 /// @file snake_task.cpp
-/// Snake game
+/// @date 2026-04-19
+/// @author wawa2024
+/// @brief A snake game task implemented for FreeRTOS
 ///////////////////////////// 1.Libraries //////////////////////////////
 
 #include <stdint.h>
@@ -269,6 +273,7 @@ void snake_task(void* pvParameter){
       switch(snake.status){
       case WIN: msg = (char*)"YOU WON"; break;
       case LOSE: msg = (char*)"YOU LOST"; break;
+      default: msg = (char*) "???"; break;
       }
       tft.drawCentreString(msg,RESOLUTION_X/2,RESOLUTION_Y/2,1);
 

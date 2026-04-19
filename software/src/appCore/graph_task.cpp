@@ -3,9 +3,6 @@
 /// Voltage grapher
 ///////////////////////////// 1.Libraries //////////////////////////////
 
-#include <Arduino.h>
-#include <TFT_eSPI.h>
-#include <SPI.h>
 #include <esp32-oscilloscope.h>
 #include <driver/adc.h>
 #include <driver/timer.h>

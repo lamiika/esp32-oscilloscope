@@ -1,0 +1,7 @@
+.pio
+venv
+CMakeLists.txt
+dependencies.lock
+managed_components
+components
+*.old

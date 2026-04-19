@@ -1,0 +1,8 @@
+# IDF Component Manager manifest
+
+build:
+  cflags:
+    - "-Wno-error=unused-const-variable"
+    - "-Wno-error=maybe-uninitialized"
+  cppflags:
+    - "-Wno-error=switch"

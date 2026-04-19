@@ -9,6 +9,7 @@
 #include "snake_task.h"
 #include "graph_task.h"
 #include "serial_task.h"
+#include "menu_task.h"
 
 /////////////////////////////// 2.Macros ///////////////////////////////
 
@@ -18,13 +19,6 @@
 #define DEFAULT_INDEX 1
 
 /////////////////////////////// 3.Types ////////////////////////////////
-
-typedef struct {
-  void (*task)(void*);
-  char* title;
-  uint32_t stack_size;
-} menu_t;
-
 //////////////////////////// 4.Declarations ////////////////////////////
 //////////////////////////// 4.1.Variables /////////////////////////////
 //////////////////////////// 4.2.Functions /////////////////////////////
@@ -34,10 +28,10 @@ static void info(void*);
 //////////////////////////// 5.Definitions /////////////////////////////
 //////////////////////////// 5.1.Variables /////////////////////////////
 
-static menu_t items[] = {
-  {info,"About version", 2048}
-  ,{ui_task,"Oscilloscope", 16384}
-  ,{snake_task,"Snake", 16384}
+menu_t items[NUM_TASKS] = {
+  {info,(char*)"About version", 4096}
+  ,{ui_task,(char*)"Oscilloscope", 16384}
+  ,{snake_task,(char*)"Snake", 16384}
 };
 static const size_t items_num = sizeof(items)/sizeof(menu_t);
 
@@ -115,7 +109,7 @@ static bool isChildDead(TaskHandle_t t){
 
 void loop(void) {
 
-  xTaskCreate(serial_task,"serial_task",2048,NULL,1,NULL);
+  xTaskCreate(serial_task,"serial_task",4096,NULL,1,NULL);
 
   QueueHandle_t q = hmiCore_init(100,250,100);
   uint16_t index = 0;

@@ -18,20 +18,15 @@ RUN apt-get update && apt-get install -y \
     libusb-1.0-0 \
     build-essential
 
-WORKDIR /
-
-RUN python3 -m venv /venv
-
-RUN /venv/bin/pip install --no-cache-dir platformio
-
-ENV PATH="/venv/bin:$PATH"
-
-WORKDIR /tmp
-
-COPY platformio.ini .
-
-RUN pio pkg install
+RUN apt-get update && apt-get install -y \
+    libncurses5-dev \
+    flex \
+    bison
 
 WORKDIR /workspace
 
-CMD ["platformio", "--version"]
+ENV PATH="/workspace/venv/bin:$PATH"
+
+ENV PLATFORMIO_CORE_DIR="/workspace/.pio"
+
+CMD ["python3", "--version"]
