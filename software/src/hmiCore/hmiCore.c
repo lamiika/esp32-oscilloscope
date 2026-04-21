@@ -28,7 +28,7 @@
     21.04.2026 JR
         - Changed default event detection times
         - Removed unused code
-        - Added a default argument to encoder state switch 
+        - Added a default argument to encoder state switch
 */
 
 #include <hmiCore.h>
@@ -47,7 +47,7 @@
 
 // These values are in milli seconds if sampling frequency is 1kHz
 #define DEFAULT_PRESSED_SAMPLES         50
-#define DEFAULT_HOLD_SAMPLES            500  
+#define DEFAULT_HOLD_SAMPLES            500
 #define DEFAULT_HOLD_RELEASE_SAMPLES    30
 
 #define setHigh(x)              gpio_set_level((gpio_num_t)x, 1)
@@ -395,7 +395,7 @@ LOCAL void hmiHandler( void * pvParameters )
                     break;
 
                 default:
-                    // In case there is an error we do not want 
+                    // In case there is an error we do not want
                     // to think that encoder has been turned
                     next = hmiCore.enc.newState;
                     last = hmiCore.enc.newState;
@@ -439,9 +439,18 @@ LOCAL void hmiHandler( void * pvParameters )
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Reads a hmiEventData_t queue to end and returns last pressed button.
+ * @param q QueueHandle_t
+ * @return Returns a hmiEventData_t struct.
+ */
 hmiEventData_t getinputs(QueueHandle_t q){
   hmiEventData_t data = {E_NONE,0};
+  hmiEventData_t tmp_data = {E_NONE,0};
   delay_ms(17); // 60 Hz
-  while(xQueueReceive(q,&data,0) == pdTRUE);
+  while(xQueueReceive(q,&data,0) == pdTRUE) if(tmp_data == E_PRESSED) data = tmp_data;
   return data;
 }
