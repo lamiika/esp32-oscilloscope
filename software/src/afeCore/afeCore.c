@@ -107,44 +107,9 @@ void afeCore_init()
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-typedef enum
-{
-    // No error 
-    NO_ERR = 0,
-    // Given trigger level out of bounds
-    TRIGGER_LEVEL_BOUNDS,
-    // Given trigger length out of bounds
-    TRIGGER_LENGTH_BOUNDS,
-    // Given channel is not valid
-    TRIGGER_CHANNEL_INVALID,
-    // Function parameter was NULL
-    NULL_PTR_ERR,
+#define SAMPLE_BUFFER_SIZE 10240
 
-} afeErr_t;
-
-typedef enum
-{
-    RISING_EDGE_TRIGGER,
-    FALLING_EDGE_TRIGGER,
-    BOTH_EDGE_TRIGGER,
-
-} afeTrigType_t;
-
-typedef enum
-{
-    NO_TRIGGER = 0,
-    SINGLE_TRIGGER,
-    REPEAT_TRIGGER,
-    AUTO_TRIGGER,
-} afeTrigMode_t;
-
-typedef enum
-{
-    RANGE_5V,
-    RANGE_15V,
-} afeRange_t;
-
-#define SAMPLE_BUFFER_SIZE
+typedef uint8_t bool;
 
 typedef struct
 {

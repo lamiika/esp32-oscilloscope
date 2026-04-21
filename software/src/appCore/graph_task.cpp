@@ -17,7 +17,7 @@
 #define REFRESH_RATE_MS 300
 #define ADC_RESOLUTION 4096
 #define BUF_LEN 10240
-#define ZERO_VOLTS (4096.0/2)
+#define ZERO_VOLTS 2048.0
 #define MAX_VOLTS 16.0
 #define TIMESTEP_MS 1
 #define STR_LEN 16
@@ -386,6 +386,8 @@ void button_logic(uint16_t *trigger_level, ViewState *view) {
 
 void ui_task(void *pvParameters) {
   q = *(QueueHandle_t*)pvParameters;
+  tft.fillScreen(TFT_BLACK);
+//  spr.createSprite(RESOLUTION_X, RESOLUTION_Y);
 
 	xTaskCreate(adc_task, "ADC", 1024, NULL, 1, NULL);
   update_grid();
@@ -403,6 +405,7 @@ void ui_task(void *pvParameters) {
           draw_grid(ch2_view);
         }
         tft.fillScreen(TFT_BLACK);
+//        spr.fillSprite(TFT_BLACK);
         if (ch_states.ch1_active) {
           trigger(&rb_ch1, triggers.ch1_level);
           draw_graph(&rb_ch1, ch1_view, TFT_GREEN);
@@ -414,6 +417,7 @@ void ui_task(void *pvParameters) {
           draw_trigger(triggers.ch2_level, ch2_view, TFT_MAGENTA);
         }
         draw_cursor(TFT_SKYBLUE);
+//        spr.pushSprite(RESOLUTION_X, RESOLUTION_Y);
         vTaskDelay(pdMS_TO_TICKS(100));
       }
 
