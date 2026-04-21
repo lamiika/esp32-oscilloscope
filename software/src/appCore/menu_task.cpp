@@ -111,7 +111,7 @@ void loop(void) {
 
   xTaskCreate(serial_task,"serial_task",4096,NULL,1,NULL);
 
-  QueueHandle_t q = hmiCore_init(100,250,100);
+  QueueHandle_t q = hmiCore_init();
   uint16_t index = 0;
   TaskHandle_t xHandle = NULL;
 
