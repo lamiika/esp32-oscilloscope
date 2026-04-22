@@ -7,6 +7,7 @@
 #include <hmiCore.h>
 
 #include "appCore/menu_task.h"
+#include "appCore/telnet_task.h"
 
 /////////////////////////////// 2.Macros ///////////////////////////////
 /////////////////////////////// 3.Types ////////////////////////////////
@@ -17,6 +18,7 @@
 //////////////////////////// 5.1.Variables /////////////////////////////
 
 TFT_eSPI tft = TFT_eSPI();
+TFT_eSprite spr = TFT_eSprite(&tft);
 SemaphoreHandle_t screen_mutex = xSemaphoreCreateMutex();
 SemaphoreHandle_t inputs_mutex = xSemaphoreCreateMutex();
 SemaphoreHandle_t serial_mutex = xSemaphoreCreateMutex();
@@ -83,6 +85,9 @@ void setup() {
   }
   tft.drawCentreString("SETUP BOOTED",RESOLUTION_X/2,RESOLUTION_Y/2,1);
   // ^drawCentreString(string,x,y,font_px_size)
+
+  wifi_init();
+  telnet_start();
 
   DELAY(2000);
 }
