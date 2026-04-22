@@ -63,8 +63,9 @@ typedef enum
 
 typedef enum
 {
-    RANGE_5V,
+    RANGE_5V = 0,
     RANGE_15V,
+    LAST_RANGE
 } afeRange_t;
 
 ////////////////////////////////////////////////////////////////////////////////
