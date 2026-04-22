@@ -6,7 +6,9 @@
 #include <esp32-oscilloscope.h>
 #include <hmiCore.h>
 
+#include "appCore/serial_task.h"
 #include "appCore/menu_task.h"
+#include "appCore/telnet_task.h"
 
 /////////////////////////////// 2.Macros ///////////////////////////////
 /////////////////////////////// 3.Types ////////////////////////////////
@@ -54,37 +56,25 @@ void reset() {
 }
 
 void setup() {
+
   Serial.begin(115200);
+
+  xTaskCreate(serial_task,"serial_task",4096,NULL,1,NULL);
 
   tft.init();
   tft.setRotation(3);
 
   reset();
-
-  int columns = (RESOLUTION_X/WIDTH_MEDIUM);
-  int lines = (RESOLUTION_Y/HEIGHT_MEDIUM);
-
-  for(int i = 0 ; i < lines ; i++){
-    int ypos = i * HEIGHT_MEDIUM;
-    tft.setCursor(0,ypos);
-    if ( i == 0 || i == (lines-1) ) {
-      tft.print("+");
-      for( int j = 0 ; j < (columns-2) ; j++){
-        tft.print("-");
-      }
-      tft.print("+");
-    } else {
-      tft.print("|");
-      for( int j = 0 ; j < (columns-2) ; j++){
-        tft.print(" ");
-      }
-      tft.print("|");
-    }
-  }
   tft.drawCentreString("SETUP BOOTED",RESOLUTION_X/2,RESOLUTION_Y/2,1);
   // ^drawCentreString(string,x,y,font_px_size)
+
+  wifi_init();
+  telnet_init();
 
   DELAY(2000);
 }
 
-extern void loop(); // menu_task
+void loop(){
+  //menu_task();
+  DELAY(10);
+}

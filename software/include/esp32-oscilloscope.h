@@ -7,8 +7,8 @@
 #include <TFT_eSPI.h> // Graphics and font library for ST7735 driver chip
 #include <SPI.h>
 
-#ifndef ESP32_OSCILLOSCOPE
-#define ESP32_OSCILLOSCOPE
+#ifndef ESP32_OSCILLOSCOPE_H
+#define ESP32_OSCILLOSCOPE_H
 
 /////////////////////////////// 2.Macros ///////////////////////////////
 

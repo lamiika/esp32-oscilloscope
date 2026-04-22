@@ -15,7 +15,6 @@
 
 #define REFRESH_RATE_MS 170
 #define ITEM_SIZE sizeof(hmiEventData_t)
-#define DELAY(X) vTaskDelay(X / portTICK_PERIOD_MS)
 #define DEFAULT_INDEX 1
 
 /////////////////////////////// 3.Types ////////////////////////////////
@@ -28,7 +27,7 @@ static void info(void*);
 //////////////////////////// 5.Definitions /////////////////////////////
 //////////////////////////// 5.1.Variables /////////////////////////////
 
-menu_t items[NUM_TASKS] = {
+menu_t items[MENU_TASKS] = {
   {info,(char*)"About version", 4096}
   ,{ui_task,(char*)"Oscilloscope", 16384}
   ,{snake_task,(char*)"Snake", 16384}
@@ -84,15 +83,12 @@ static void draw(uint16_t index) {
 
     for( uint16_t i = 0 ; i < items_num ; i++ ){
 
-      tft.setCursor(0,i*HEIGHT_MEDIUM);
-
       if( index == i )
         tft.print("> ");
       else
         tft.print("  ");
 
-      tft.setCursor(2*WIDTH_MEDIUM,i*HEIGHT_MEDIUM);
-      tft.print(items[i].title);
+      tft.println(items[i].title);
 
     }
 
@@ -107,9 +103,7 @@ static bool isChildDead(TaskHandle_t t){
   return t == NULL ? false : s == eDeleted;
 }
 
-void loop(void) {
-
-  xTaskCreate(serial_task,"serial_task",4096,NULL,1,NULL);
+void menu_task(void){
 
   QueueHandle_t q = hmiCore_init(100,250,100);
   uint16_t index = 0;
