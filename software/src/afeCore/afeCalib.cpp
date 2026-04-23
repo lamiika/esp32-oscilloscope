@@ -89,7 +89,7 @@ void afeCore_calibrationTask( void* pvParameter )
         if( e.inputs & BTN_ENTER ) { break; }
     }
 
-    static uint32_t ch1_sum, ch2_sum;
+    uint32_t ch1_sum = 0, ch2_sum = 0;
 
     // Average samples over 2 seconds
     // TODO: Change this to wait for ~2 seconds 

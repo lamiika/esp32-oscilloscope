@@ -55,7 +55,30 @@
 
 afeCore_t afeCore =
 {
-
+    .trigger = 
+    {
+        .level = 0,
+        .mode = NO_TRIGGER,
+        .type = RISING_EDGE_TRIGGER,
+        .selectedChannel = CHANNEL_1,
+        .postTrigLen = 0,
+        .preTrigLen = 0,
+        .isTriggered = false,
+        .triggerIndex = 0,
+        .holdoff = 0,
+    },
+    .sampleRate = 1000,
+    .ch1_range = RANGE_5V,
+    .ch2_range = RANGE_5V, 
+    .currentSampleIndex = 0,
+    .ch1_sampleBuffer = {0},
+    .ch2_sampleBuffer = {0},
+    .ch1_cal = {0},
+    .ch2_cal = {0},
+    .ch1_handle = 0,
+    .ch2_handle = 0,
+    .isCh1Disabled = false,
+    .isInitialized = false,
 };
 
 ////////////////////////////////////////////////////////////////////////////////
