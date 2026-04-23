@@ -454,12 +454,12 @@ afeErr_t afeCore_setChannelRange( afeRange_t range, afeChannel_t channel )
     if( channel == CHANNEL_1 )
     {
         afeCore.ch1_range = range;
-        gpio_set_level( (gpio_num_t)CH1_RANGE_SEL, range == RANGE_5V ? 1 : 0 );
+        gpio_set_level( (gpio_num_t)CH1_RANGE_SEL, range == RANGE_15V ? 1 : 0 );
     }
     else if( channel == CHANNEL_2 )
     {
         afeCore.ch2_range = range;
-        gpio_set_level( (gpio_num_t)CH2_RANGE_SEL, range == RANGE_5V ? 1 : 0 );
+        gpio_set_level( (gpio_num_t)CH2_RANGE_SEL, range == RANGE_15V ? 1 : 0 );
     }
 
 }
