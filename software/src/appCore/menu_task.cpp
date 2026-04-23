@@ -12,6 +12,8 @@
 #include "menu_task.h"
 #include "afeCore.h"
 
+#include "telnet_task.h"
+
 /////////////////////////////// 2.Macros ///////////////////////////////
 
 #define REFRESH_RATE_MS 170
@@ -23,15 +25,16 @@
 //////////////////////////// 4.1.Variables /////////////////////////////
 //////////////////////////// 4.2.Functions /////////////////////////////
 
-static void info(void*);
+static void info_task(void*);
 
 //////////////////////////// 5.Definitions /////////////////////////////
 //////////////////////////// 5.1.Variables /////////////////////////////
 
 menu_t items[MENU_TASKS] = {
-  {info,(char*)"About version", 4096}
+  {info_task,(char*)"About version", 4096}
   ,{ui_task,(char*)"Oscilloscope", 16384}
   ,{snake_task,(char*)"Snake", 16384}
+  ,{telnet_task,(char*)"Telnet",2048}
   ,{afeCore_calibrationTask, (char*)"AFE Cal", 16384}
 };
 static const size_t items_num = sizeof(items)/sizeof(menu_t);
@@ -41,10 +44,12 @@ static const size_t items_num = sizeof(items)/sizeof(menu_t);
 /**
  * Example menu task structure
  */
-static void info(void* pvParameter){
+static void info_task(void* pvParameter){
+
+  static const char* TAG = "info_task";
 
 #ifdef DEBUG
-  Serial.println("[info_task]: launched");
+  ESP_LOGI(TAG,MSG_LAUNCHED);
 #endif
 
   QueueHandle_t q = *(QueueHandle_t*)pvParameter;
@@ -69,7 +74,7 @@ static void info(void* pvParameter){
   mutex_release();
 
 #ifdef DEBUG
-  Serial.println("[info_task]: self-deleting");
+  ESP_LOGI(TAG,MSG_DELETED);
 #endif
 
   vTaskDelete(NULL); // self-delete
