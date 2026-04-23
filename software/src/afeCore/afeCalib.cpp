@@ -99,7 +99,7 @@ void afeCore_calibrationTask( void* pvParameter )
         int ch1_sample = 0, ch2_sample = 0;
         int ch1_mv = 0, ch2_mv = 0;
 
-        ch1_sample = adc1_get_raw( CH2_VOLTAGE ); 
+        ch2_sample = adc1_get_raw( CH2_VOLTAGE ); 
         adc2_get_raw( CH1_VOLTAGE, ADC_WIDTH_BIT_12, &ch1_sample ); 
 
         // adc_oneshot_read( afeCore->ch1_handle, CH1_VOLTAGE, &ch1_sample );
