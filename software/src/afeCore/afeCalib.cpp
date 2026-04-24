@@ -38,6 +38,8 @@
     #define LOCAL   static inline
 #endif
 
+#define SAMPLE_MULTIPLIER   2
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -82,6 +84,15 @@ LOCAL void handleInputs( QueueHandle_t q )
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
+LOCAL void clearInputBuffer( QueueHandle_t q )
+{
+    hmiEventData_t data = { E_NONE, 0 };
+    while( xQueueReceive( q, &data, 0 ) == pdTRUE );
+}
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
 LOCAL void calibrateZeroOffset( QueueHandle_t q )
 {
     tft.fillScreen( TFT_BLACK );
@@ -91,6 +102,8 @@ LOCAL void calibrateZeroOffset( QueueHandle_t q )
     tft.drawString( "Short each input,", xMidPoint, 2*yOffset );
     tft.drawString( "after which press enter", xMidPoint, 3*yOffset );
 
+    clearInputBuffer( q );
+
     handleInputs(q);
 
     int32_t ch1_sum = 0, ch2_sum = 0;
@@ -98,7 +111,7 @@ LOCAL void calibrateZeroOffset( QueueHandle_t q )
     // Average samples over 2 seconds
     // TODO: Change this to wait for ~2 seconds 
     // and use afeCore_getNewestSamples( n = 2*afeCore.sampleRate );
-    for( uint32_t i = 0; i < (2 * afeCore_getSampleRate()); i++ )
+    for( uint32_t i = 0; i < (SAMPLE_MULTIPLIER * afeCore_getSampleRate()); i++ )
     {
         int ch1_sample = 0, ch2_sample = 0;
 
@@ -109,8 +122,8 @@ LOCAL void calibrateZeroOffset( QueueHandle_t q )
         ch2_sum += ch2_sample;
     }
 
-    ch1_sum /= (2 * afeCore_getSampleRate());
-    ch2_sum /= (2 * afeCore_getSampleRate());
+    ch1_sum /= (SAMPLE_MULTIPLIER * afeCore_getSampleRate());
+    ch2_sum /= (SAMPLE_MULTIPLIER * afeCore_getSampleRate());
 
     // Zero offset is implemented as ( rawValue + zeroOffset )
     // so the offset needs to be inverse of the measured value
@@ -132,6 +145,9 @@ LOCAL void calibrateZeroOffset( QueueHandle_t q )
     tft.drawString( ch2_sumString, xMidPoint, 8*yOffset );
     tft.setTextSize( TFT_SMALL );  
     tft.drawString( "Press enter to continue ==>>", xMidPoint, 9*yOffset );  
+
+    // Clear all events
+    clearInputBuffer( q );
 
     handleInputs(q);
 }
@@ -176,6 +192,9 @@ LOCAL void calibrateRange( QueueHandle_t q, afeRange_t range )
         
         tft.drawString( "after which press enter", xMidPoint, 3*yOffset );
 
+        // Clear all events
+        clearInputBuffer( q );
+
         handleInputs(q);
 
         // Delay for 1 second so the inputs have time to stabilize
@@ -186,7 +205,7 @@ LOCAL void calibrateRange( QueueHandle_t q, afeRange_t range )
         // Average samples over 2 seconds
         // TODO: Change this to wait for ~2 seconds 
         // and use afeCore_getNewestSamples( n = 2*afeCore.sampleRate );
-        for( uint32_t i = 0; i < (2 * afeCore_getSampleRate()); i++ )
+        for( uint32_t i = 0; i < (SAMPLE_MULTIPLIER * afeCore_getSampleRate()); i++ )
         {
             int ch1_sample = 0, ch2_sample = 0;
 
@@ -197,6 +216,16 @@ LOCAL void calibrateRange( QueueHandle_t q, afeRange_t range )
             ch2_sum += ch2_sample;
         }
 
+        char buff[120];
+        std::snprintf( buff, sizeof(buff), "Range: %d, Pol: %ld, ch1_sum: %ld, ch2_sum: %ld\r\n", range, i, ch1_sum, ch2_sum);
+        Serial.print(buff);
+
+        ch1_sum /= (SAMPLE_MULTIPLIER * afeCore_getSampleRate());
+        ch2_sum /= (SAMPLE_MULTIPLIER * afeCore_getSampleRate());
+
+        std::snprintf( buff, sizeof(buff), "ch1_sum: %ld, ch2_sum: %ld\r\n", ch1_sum, ch2_sum);
+        Serial.print(buff);
+
         // Should not be needed when afeCore is used to read the samples 
         // since it will automaticly calculate the offset and invert the sign
         int32_t ch1_zeroOffset = 0, ch2_zeroOffset = 0;
@@ -204,12 +233,22 @@ LOCAL void calibrateRange( QueueHandle_t q, afeRange_t range )
         afeCore_getZeroOffset( &ch2_zeroOffset, CHANNEL_2 );
         ch1_sum += ch1_zeroOffset;
         ch2_sum += ch2_zeroOffset;
+        
+        std::snprintf( buff, sizeof(buff), "ch1_sum: %ld, ch1_zeroOffset: %ld, ch2_sum: %ld, ch2_zeroOffset: %ld\r\n", ch1_sum, ch1_zeroOffset, ch2_sum, ch2_zeroOffset );
+        Serial.print(buff);
+        
         ch1_sum *= -1;
         ch2_sum *= -1;
+        
+        std::snprintf( buff, sizeof(buff), "ch1_sum: %ld, ch2_sum: %ld\r\n", ch1_sum, ch2_sum);
+        Serial.print(buff);
 
         // Range is expected to be what was set earlier in the calibration process
         double ch1_voltage = afeCore_convertSampleToVoltage( ch1_sum, range );
         double ch2_voltage = afeCore_convertSampleToVoltage( ch2_sum, range );
+
+        std::snprintf( buff, sizeof(buff), "ch1_voltage: %.2lf, ch2_voltage: %.2lf\r\n", ch1_voltage, ch2_voltage);
+        Serial.print(buff);
 
         if( i == 0 )    
         { 
@@ -217,10 +256,13 @@ LOCAL void calibrateRange( QueueHandle_t q, afeRange_t range )
             ch1_pScaling = expected / ch1_voltage;
             ch2_pScaling = expected / ch2_voltage;
 
+            std::snprintf( buff, sizeof(buff), "ch1_pScaling: %.2lf, ch2_pScaling: %.2lf\r\n", ch1_pScaling, ch2_pScaling );
+            Serial.print(buff);
+
             std::snprintf( ch1_scalingStr, sizeof(ch1_scalingStr), "CH1: %.6lf", ch1_pScaling );
             std::snprintf( ch2_scalingStr, sizeof(ch2_scalingStr), "CH2: %.6lf", ch2_pScaling );
 
-            tft.drawString( "Calculated pScaling values:", xMidPoint, 6*yOffset );
+            tft.drawString( "Calculated pScaling:", xMidPoint, 6*yOffset );
         }
         else            
         { 
@@ -228,16 +270,22 @@ LOCAL void calibrateRange( QueueHandle_t q, afeRange_t range )
             ch1_nScaling = expected / ch1_voltage;
             ch2_nScaling = expected / ch2_voltage;
 
+            std::snprintf( buff, sizeof(buff), "ch1_pScaling: %.2lf, ch2_pScaling: %.2lf\r\n", ch1_pScaling, ch2_pScaling );
+            Serial.print(buff);
+
             std::snprintf( ch1_scalingStr, sizeof(ch1_scalingStr), "CH1: %.6lf", ch1_nScaling );
             std::snprintf( ch2_scalingStr, sizeof(ch2_scalingStr), "CH2: %.6lf", ch2_nScaling );
 
-            tft.drawString( "Calculated nScaling values:", xMidPoint, 6*yOffset );
+            tft.drawString( "Calculated nScaling:", xMidPoint, 6*yOffset );
         }
         
         tft.drawString( ch1_scalingStr, xMidPoint, 7*yOffset );
         tft.drawString( ch2_scalingStr, xMidPoint, 8*yOffset );
         tft.setTextSize( TFT_SMALL );  
         tft.drawString( "Press enter to continue ==>>", xMidPoint, 9*yOffset );  
+
+        // Clear all events
+        clearInputBuffer( q );
 
         handleInputs(q);  
 
@@ -271,21 +319,71 @@ void afeCore_calibrationTask( void* pvParameter )
         exitIf( getinputs( q ).inputs & BTN_ESC );
     }
 
-    // Clear all events
-    getinputs( q );
-
     tft.fillScreen( TFT_BLACK );
     tft.setTextSize( TFT_LARGE );
     tft.setTextColor( TFT_WHITE );
     tft.setTextDatum( MC_DATUM );
     tft.drawString( "CALIBRATION", xMidPoint, 1*yOffset );
-    tft.setTextSize( TFT_SMALL );
-    tft.drawString( "By pressing enter you start the calibration,", xMidPoint, 2*yOffset );
-    tft.drawString( "and the previous calibration will be lost.", xMidPoint, 3*yOffset );
-    tft.drawString( "Press enter to continue ==>>", xMidPoint, 4*yOffset );
+    tft.setTextSize( TFT_MEDIUM );
+    tft.drawString( "By pressing enter you", xMidPoint, 2*yOffset );
+    tft.drawString( "start the calibration,", xMidPoint, 3*yOffset );
+    tft.drawString( "and the previous", xMidPoint, 4*yOffset );
+    tft.drawString( "calibration will be lost.", xMidPoint, 5*yOffset );
+    tft.setTextSize( TFT_SMALL ); 
+    tft.drawString( "Press enter to continue ==>>", xMidPoint, 6*yOffset );
 
-    handleInputs(q);
+    clearInputBuffer( q );
 
+    for(;;)
+    {
+        hmiEventData_t e = getinputs( q );
+        exitIf( e.inputs & BTN_ESC );
+        if( e.inputs & BTN_ENTER ) { break; }
+        if( e.inputs & BTN_RIGHT ) 
+        { 
+            tft.setTextSize( TFT_SMALL );
+            tft.setTextDatum( ML_DATUM );
+            tft.setTextColor( TFT_BLACK );
+            tft.drawString( "5V", 5, 10 );
+            tft.setTextColor( TFT_WHITE );
+            tft.drawString( "15V", 5, 10 );
+            tft.setTextSize( TFT_MEDIUM );
+            tft.setTextDatum( MC_DATUM );
+            afeCore_setChannelRange( RANGE_15V, CHANNEL_1 ); 
+            afeCore_setChannelRange( RANGE_15V, CHANNEL_2 ); 
+        }
+        if( e.inputs & BTN_LEFT ) 
+        { 
+            tft.setTextSize( TFT_SMALL );
+            tft.setTextDatum( ML_DATUM );
+            tft.setTextColor( TFT_BLACK );
+            tft.drawString( "15V", 5, 10 );
+            tft.setTextColor( TFT_WHITE );
+            tft.drawString( "5V", 5, 10 );
+            tft.setTextSize( TFT_MEDIUM );
+            tft.setTextDatum( MC_DATUM );
+            afeCore_setChannelRange( RANGE_5V, CHANNEL_1 ); 
+            afeCore_setChannelRange( RANGE_5V, CHANNEL_2 ); 
+        }
+
+        double ch1_voltage = afeCore_getCalibratedVoltage( CHANNEL_1 );
+        double ch2_voltage = afeCore_getCalibratedVoltage( CHANNEL_2 );
+
+        char ch1_string[20];
+        char ch2_string[20];
+        char string3[60];
+
+        std::snprintf( ch1_string, sizeof(ch1_string), "CH1: %.2lf", ch1_voltage );
+        std::snprintf( ch2_string, sizeof(ch2_string), "CH2: %.2lf", ch2_voltage );
+        
+        std::snprintf( string3, sizeof(string3), "CH1_voltage: %.2lf, CH2_voltage: %.2lf\r\n", ch1_voltage, ch2_voltage );
+        Serial.print(string3);  
+
+        tft.setTextSize( TFT_SMALL );
+        tft.drawString( ch1_string, RESOLUTION_X / 4, 9*yOffset);
+        tft.drawString( ch1_string, RESOLUTION_X * 3 / 4, 9*yOffset);
+        tft.setTextSize( TFT_MEDIUM );
+    }
     isCalibrationDone = false;
 
     afeCore_resetCalibration();
@@ -308,11 +406,9 @@ void afeCore_calibrationTask( void* pvParameter )
 
     isCalibrationDone = true;
 
-    exitIf( 1 );
+    writeCalibrationData();
 
-    ////////////////////////////////////////////////
-    // CHANGE SPI FREQUENCY TO 40-60MHz in TFT-eSPI
-    ////////////////////////////////////////////////
+    exitIf( 1 );
 }
 
 ////////////////////////////////////////////////////////////////////////////////

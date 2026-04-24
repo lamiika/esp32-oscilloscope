@@ -72,19 +72,19 @@ afeCore_t afeCore =
     {
         .zeroOffset[0] = 0,
         .zeroOffset[1] = 0,
-        .pScaling[0] = 0.0,
-        .pScaling[1] = 0.0,
-        .nScaling[0] = 0.0,
-        .nScaling[1] = 0.0,
+        .pScaling[0] = 1.0,
+        .pScaling[1] = 1.0,
+        .nScaling[0] = 1.0,
+        .nScaling[1] = 1.0,
     },
     .ch2_cal =
     {
         .zeroOffset[0] = 0,
         .zeroOffset[1] = 0,
-        .pScaling[0] = 0.0,
-        .pScaling[1] = 0.0,
-        .nScaling[0] = 0.0,
-        .nScaling[1] = 0.0,
+        .pScaling[0] = 1.0,
+        .pScaling[1] = 1.0,
+        .nScaling[0] = 1.0,
+        .nScaling[1] = 1.0,
     },
     .ch1_handle = 0,
     .ch2_handle = 0,
@@ -139,20 +139,19 @@ LOCAL void readCalibrationData(void)
             for( uint32_t i = 0; i < LAST_RANGE; i++ )
             {
                 data->zeroOffset[i] = 0;
-                data->pScaling[i] = 0.0f;
-                data->nScaling[i] = 0.0f;
+                data->pScaling[i] = 1.0;
+                data->nScaling[i] = 1.0;
             }
         }
     }
 
     nvs_close( handle );
-
 }
 
 //////////////////////////////////////
 //////////////////////////////////////
 
-LOCAL void writeCalibrationData(void)
+void writeCalibrationData(void)
 {
     nvs_handle_t handle;
     afeChannelCal_t *data;
@@ -227,18 +226,24 @@ afeErr_t afeCore_setZeroOffset( int32_t offset, afeChannel_t channel )
 // on the range that is currently enabled
 afeErr_t afeCore_getZeroOffset( int32_t *offset, afeChannel_t channel )
 {
+    if( offset == NULL ) { return NULL_PTR_ERR; }
+
     switch( channel )
     {
         case CHANNEL_1: 
-            return afeCore.ch1_cal.zeroOffset[ afeCore.ch1_range ]; 
+            *offset = afeCore.ch1_cal.zeroOffset[ afeCore.ch1_range ]; 
             break;
 
         case CHANNEL_2:
-            return afeCore.ch2_cal.zeroOffset[ afeCore.ch2_range ]; 
+            *offset = afeCore.ch2_cal.zeroOffset[ afeCore.ch2_range ]; 
             break;
 
-        default: return CHANNEL_INVALID; break;
+        default: 
+            return CHANNEL_INVALID; 
+            break;
     }
+
+    return NO_ERR;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -298,13 +303,41 @@ void afeCore_resetCalibration(void)
     {
         // CH1
         afeCore.ch1_cal.zeroOffset[i] = 0;
-        afeCore.ch1_cal.pScaling[i] = 0.0;
-        afeCore.ch1_cal.nScaling[i] = 0.0;
+        afeCore.ch1_cal.pScaling[i] = 1.0;
+        afeCore.ch1_cal.nScaling[i] = 1.0;
         // CH2
         afeCore.ch2_cal.zeroOffset[i] = 0;
-        afeCore.ch2_cal.pScaling[i] = 0.0;
-        afeCore.ch2_cal.nScaling[i] = 0.0;
+        afeCore.ch2_cal.pScaling[i] = 1.0;
+        afeCore.ch2_cal.nScaling[i] = 1.0;
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+double afeCore_getCalibratedVoltage( afeChannel_t channel )
+{
+    int sample = 0;
+    double voltage = 0.0;
+
+    switch( channel )
+    {
+        case CHANNEL_1:
+            adc_oneshot_read( afeCore_getChannelAdcHandle(CHANNEL_1), CH1_VOLTAGE, &sample );
+            sample += afeCore.ch1_cal.zeroOffset[ afeCore.ch1_range ];
+            sample *= sample < 0 ? afeCore.ch1_cal.nScaling[ afeCore.ch1_range ] : afeCore.ch1_cal.pScaling[ afeCore.ch1_range ];
+            voltage = afeCore_convertSampleToVoltage( sample, afeCore.ch1_range );
+            break;
+        
+        case CHANNEL_2:
+            adc_oneshot_read( afeCore_getChannelAdcHandle(CHANNEL_2), CH2_VOLTAGE, &sample );
+            sample += afeCore.ch2_cal.zeroOffset[ afeCore.ch2_range ];
+            sample *= sample < 0 ? afeCore.ch2_cal.nScaling[ afeCore.ch2_range ] : afeCore.ch2_cal.pScaling[ afeCore.ch2_range ];
+            voltage = afeCore_convertSampleToVoltage( sample, afeCore.ch2_range );
+            break;
+    }
+
+    return voltage;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -314,6 +347,18 @@ void afeCore_resetCalibration(void)
 void afeCore_init(void)
 {
     calibrationDataInit();
+
+    readCalibrationData();
+
+    // Configure output pins
+    gpio_config_t outputConfig = {
+        .pin_bit_mask = (1ULL << CH1_RANGE_SEL) | (1ULL << CH2_RANGE_SEL),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    esp_err_t err = gpio_config( &outputConfig );
 
     afeCore_setChannelRange( RANGE_15V, CHANNEL_1 );
     afeCore_setChannelRange( RANGE_15V, CHANNEL_2 );

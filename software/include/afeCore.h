@@ -246,7 +246,11 @@ extern double afeCore_convertSampleToVoltage( int32_t sample, afeRange_t range )
 // Used to calibrate both analog frontends.
 extern void afeCore_calibrationTask( void* pvParameter );
 
+extern double afeCore_getCalibratedVoltage( afeChannel_t channel );
+
 extern void afeCore_resetCalibration(void);
+
+extern void writeCalibrationData(void);
 
 // Sets the calibration zero offset for the specified channel
 extern afeErr_t afeCore_setZeroOffset( int32_t offset, afeChannel_t channel );
