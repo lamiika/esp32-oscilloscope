@@ -4,7 +4,6 @@
 ///////////////////////////// 1.Libraries //////////////////////////////
 
 #include <esp32-oscilloscope.h>
-#include <driver/timer.h>
 #include <hmiCore.h>
 #include "afeCore.h"
 
@@ -173,8 +172,62 @@ float get_voltage(int y, ViewState view) {
   return voltage;
 }
 
-void autoset(ViewState view) {
+void apply_autoset(RingBuffer *rb, ViewState *view) {
+  uint16_t min_val = rb->samples[0];
+  uint16_t max_val = rb->samples[0];
+
+  for (size_t i = 1; i < BUF_LEN; ++i) {
+    if (rb->samples[i] < min_val) {
+      min_val = rb->samples[i];
+    }
+    if (rb->samples[i] > max_val) {
+      max_val = rb->samples[i];
+    }
+  }
+
+  view->y_offset = min_val + (max_val - min_val) / 2;
+  view->y_zoom = RESOLUTION_Y / (max_val - min_val) * 1.1;
+
+  uint32_t sum = 0;
+  for (int i = 0; i < BUF_LEN; i++) {
+    sum += rb->samples[i];
+  }
+  uint16_t mean = sum / BUF_LEN;
+
+  uint16_t crossings[100];
+  uint16_t count = 0;
+
+  for (uint16_t i = 1; i < BUF_LEN; i++) {
+    if (rb->samples[i-1] < mean - 5 && rb->samples[i] >= mean + 5) {
+      if (count < 100) crossings[count++] = i;
+    }
+  }
+
+  float avg_period = 0;
+
+  if (count > 1) {
+    uint32_t total = 0;
+    for (int i = 1; i < count; i++) {
+      total += (crossings[i] - crossings[i-1]);
+    }
+    avg_period = (float)total / (count - 1);
+  }
+
+  float desired_cycles = 3.0f;
+  float samples_per_screen = avg_period * desired_cycles;
   
+  view->x_zoom = (uint16_t)(samples_per_screen / (float)RESOLUTION_X + 0.5f);
+
+  view->x_offset = 0;
+}
+
+void autoset() {
+  if (ch_states.ch_selected == Channel::CH1 && ch_states.ch1_active) {
+    apply_autoset(&rb_ch1, &ch1_view);
+  }
+  if (ch_states.ch_selected == Channel::CH2 && ch_states.ch2_active) {
+    apply_autoset(&rb_ch2, &ch2_view);
+  }
 }
 
 void trigger(RingBuffer *rb, uint16_t trigger_level) {
@@ -290,6 +343,8 @@ void button_logic(uint16_t *trigger_level, ViewState *view) {
     state = State::TRIGGER;
   } else if ( inputs & BTN_MEASURE ) {
     state = State::MEASURE;
+  } else if ( inputs & BTN_AUTOSET ) {
+    autoset();
   } else if ( inputs & BTN_CURSORS ) {
     if (state == State::CURSOR) {
       cursor_1.en = !cursor_1.en;
@@ -342,20 +397,20 @@ void button_logic(uint16_t *trigger_level, ViewState *view) {
         view->y_zoom *= 0.9;
         update_grid();
       } else if (inputs & BTN_RIGHT) {
-        view->x_zoom *= 1.1;
+        view->x_zoom *= 0.9;
         update_grid();
       } else if (inputs & BTN_LEFT) {
-        view->x_zoom *= 0.9;
+        view->x_zoom *= 1.1;
         update_grid();
       }
       break;
 
     case State::POSITION:
       if (inputs & BTN_UP) {
-        view->y_offset += 50;
+        view->y_offset -= 50;
         update_grid();
       } else if (inputs & BTN_DOWN) {
-        view->y_offset -= 50;
+        view->y_offset += 50;
         update_grid();
       } else if (inputs & BTN_RIGHT) {
         view->x_offset += 50;
@@ -368,9 +423,9 @@ void button_logic(uint16_t *trigger_level, ViewState *view) {
 
     case State::CURSOR:
       if (inputs & BTN_UP) {
-        cursor_1.y += 5;
-      } else if (inputs & BTN_DOWN) {
         cursor_1.y -= 5;
+      } else if (inputs & BTN_DOWN) {
+        cursor_1.y += 5;
       } else if (inputs & BTN_RIGHT) {
         cursor_1.x += 5;
       } else if (inputs & BTN_LEFT) {
@@ -405,6 +460,8 @@ void oscilloscope_task(void *pvParameters) {
 	xTaskCreate( adc_task, "ADC", 4096, NULL, 1, &adc );
 
     while(true) {
+      tft.fillScreen(TFT_BLACK);
+//        spr.fillSprite(TFT_BLACK);
       if (ch_states.ch_selected == Channel::CH1) {
         button_logic(&triggers.ch1_level, &ch1_view);
         draw_grid(ch1_view);
@@ -412,22 +469,20 @@ void oscilloscope_task(void *pvParameters) {
         button_logic(&triggers.ch2_level, &ch2_view);
         draw_grid(ch2_view);
       }
-      tft.fillScreen(TFT_BLACK);
-//        spr.fillSprite(TFT_BLACK);
-    if (ch_states.ch1_active) {
-      trigger(&rb_ch1, triggers.ch1_level);
-      draw_graph(&rb_ch1, ch1_view, TFT_GREEN);
-      draw_trigger(triggers.ch1_level, ch1_view, TFT_CYAN);
-    }
-    if (ch_states.ch2_active) {
-      trigger(&rb_ch2, triggers.ch2_level);
-      draw_graph(&rb_ch2, ch2_view, TFT_YELLOW);
-      draw_trigger(triggers.ch2_level, ch2_view, TFT_MAGENTA);
-    }
-    draw_cursor(TFT_SKYBLUE);
-//        spr.pushSprite(RESOLUTION_X, RESOLUTION_Y);
-        vTaskDelay(pdMS_TO_TICKS(100));
+      if (ch_states.ch1_active) {
+        trigger(&rb_ch1, triggers.ch1_level);
+        draw_graph(&rb_ch1, ch1_view, TFT_GREEN);
+        draw_trigger(triggers.ch1_level, ch1_view, TFT_CYAN);
       }
+      if (ch_states.ch2_active) {
+        trigger(&rb_ch2, triggers.ch2_level);
+        draw_graph(&rb_ch2, ch2_view, TFT_YELLOW);
+        draw_trigger(triggers.ch2_level, ch2_view, TFT_MAGENTA);
+      }
+      draw_cursor(TFT_SKYBLUE);
+//        spr.pushSprite(RESOLUTION_X, RESOLUTION_Y);
+      vTaskDelay(pdMS_TO_TICKS(100));
+    }
 
 }
 
