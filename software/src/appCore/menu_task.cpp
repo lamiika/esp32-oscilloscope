@@ -5,6 +5,7 @@
 
 #include <esp32-oscilloscope.h>
 #include <hmiCore.h>
+#include <shellCore.h>
 
 #include "snake_task.h"
 #include "graph_task.h"
@@ -115,6 +116,7 @@ void menu_task(void){
   QueueHandle_t q = hmiCore_init(0,0,0);
   uint16_t index = 0;
   TaskHandle_t xHandle = NULL;
+  menu_t item;
 
   menu_t& default_item = items[DEFAULT_INDEX];
   xTaskCreate(default_item.task
@@ -150,9 +152,10 @@ void menu_task(void){
 
     } else if ( inputs & BTN_ENTER ) {
 
-      menu_t& item = items[index];
-      if( item.task != nullptr )
+      menu_t& cur_item = items[index];
+      if( cur_item.task != nullptr )
       {
+        item = cur_item;
         xTaskCreate(item.task
                     ,item.title
                     ,item.stack_size
@@ -170,9 +173,9 @@ void menu_task(void){
       draw(index);
     }
 
-    if(xHandle){
-      eTaskState s = eTaskGetState(xHandle);
-      if (s == eDeleted) {
+    if(xHandle) {
+      //eTaskState s = eTaskGetState(xHandle);
+      if ( not get_task_by_name(item.title) ) {
         xHandle = NULL;
         draw(index);
       }

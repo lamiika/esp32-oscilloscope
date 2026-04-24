@@ -13,6 +13,7 @@
 #include <esp32-oscilloscope.h>
 #include <time_task.h>
 #include <telnetCore.h>
+#include <infoCore.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -38,13 +39,14 @@ typedef struct {
 static String help(const String&);
 static String ls(const String&);
 static String pp(const String&);
-static String lscpu(const String&);
 static String kill(const String&);
 static String reboot(const String&);
 static String resume(const String&);
 static String suspend(const String&);
 static String time(const String&);
 static String telnet(const String&);
+static String lscpu(const String&);
+static String free(const String&);
 
 //////////////////////////// 5.Definitions /////////////////////////////
 //////////////////////////// 5.1.Variables /////////////////////////////
@@ -56,6 +58,7 @@ static builtin table[] =
   , { "ls", ls }
   , { "pp" , pp }
   , { "lscpu", lscpu }
+  , { "free" , free }
   , { "kill", kill }
   , { "reboot", reboot }
   , { "resume", resume }
@@ -179,7 +182,7 @@ static inline String print_all_tasks_info(const String& args){
   return s;
 }
 
-static TaskHandle_t get_task_by_name(const char* name){
+TaskHandle_t get_task_by_name(const char* name){
 
   if (name == NULL) return NULL;
 
@@ -249,7 +252,11 @@ static String ls(const String& args){
 }
 
 static String lscpu(const String& args){
-  return "Not implemented\r\n";
+  return get_cpu_info();
+}
+
+static String free(const String& args){
+  return get_heap_info();
 }
 
 static String reboot(const String& args){
