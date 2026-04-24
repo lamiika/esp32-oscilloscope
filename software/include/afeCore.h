@@ -171,9 +171,19 @@ typedef struct
 
 // Temporarily used for calibration ( until afeCore is finalized )
 // REMOVE WHEN NO LONGER NEEDED
-extern afeCore_t* afeCore_getCore(void);
+extern afeCore_t* afeCore_getCore(void); 
 
+// Sets the calibration zero offset for the specified channel
+extern afeErr_t afeCore_setZeroOffset( int32_t offset, afeChannel_t channel );
+extern afeErr_t afeCore_getZeroOffset( int32_t *offset, afeChannel_t channel );
 
+// Sets the calibration scaling for the specified channel
+extern afeErr_t afeCore_setScaling( float positive, float negative, 
+                                    afeChannel_t channel );
+extern afeErr_t afeCore_getScaling( float *positive, float *negative, 
+                                    afeChannel_t channel );
+
+extern void afeCore_resetCalibration(void);
 
 // Used to calibrate both analog frontends.
 extern void afeCore_calibrationTask( void* pvParameter );
@@ -244,8 +254,8 @@ extern uint32_t afeCore_getTriggerBuffer( uint16_t *ch1_buffer,
                                           uint32_t n );
 
 // Takes in a sample and converts it to voltage. 
-// Returns the voltage as double
-extern double afeCore_convertSampleToVoltage( uint16_t sample );
+// Returns the voltage as double ( does not apply calibration nor inversion )
+extern double afeCore_convertSampleToVoltage( int32_t sample, afeRange_t range );
 
 #ifdef __cplusplus
 }

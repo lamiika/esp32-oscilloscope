@@ -63,8 +63,24 @@ afeCore_t afeCore =
     .currentSampleIndex = 0,
     .ch1_sampleBuffer = {0},
     .ch2_sampleBuffer = {0},
-    .ch1_cal = {0},
-    .ch2_cal = {0},
+    .ch1_cal = 
+    {
+        .zeroOffset[0] = 0,
+        .zeroOffset[1] = 0,
+        .pScaling[0] = 0.0,
+        .pScaling[1] = 0.0,
+        .nScaling[0] = 0.0,
+        .nScaling[1] = 0.0,
+    },
+    .ch2_cal =
+    {
+        .zeroOffset[0] = 0,
+        .zeroOffset[1] = 0,
+        .pScaling[0] = 0.0,
+        .pScaling[1] = 0.0,
+        .nScaling[0] = 0.0,
+        .nScaling[1] = 0.0,
+    },
     .ch1_handle = 0,
     .ch2_handle = 0,
     .ch1_calHandle = 0,
@@ -250,6 +266,114 @@ LOCAL void calibrationDataInit(void)
 afeCore_t* afeCore_getCore(void)
 {
     return &afeCore;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+// Sets the calibration zero offset for the specified channel
+// on the range that is currently enabled
+afeErr_t afeCore_setZeroOffset( int32_t offset, afeChannel_t channel )
+{
+    switch( channel )
+    {
+        case CHANNEL_1: 
+            afeCore.ch1_cal.zeroOffset[ afeCore.ch1_range ] = offset; 
+            break;
+
+        case CHANNEL_2:
+            afeCore.ch2_cal.zeroOffset[ afeCore.ch2_range ] = offset; 
+            break;
+
+        default: return CHANNEL_INVALID; break;
+    }
+}
+
+//////////////////////////////////////
+//////////////////////////////////////
+
+// Returns the zero offset for the specified channel 
+// on the range that is currently enabled
+afeErr_t afeCore_getZeroOffset( int32_t *offset, afeChannel_t channel )
+{
+    switch( channel )
+    {
+        case CHANNEL_1: 
+            return afeCore.ch1_cal.zeroOffset[ afeCore.ch1_range ]; 
+            break;
+
+        case CHANNEL_2:
+            return afeCore.ch2_cal.zeroOffset[ afeCore.ch2_range ]; 
+            break;
+
+        default: return CHANNEL_INVALID; break;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+// Sets the calibration scaling for the specified channel
+afeErr_t afeCore_setScaling( float positive, float negative, 
+                             afeChannel_t channel )
+{
+    switch( channel )
+    {
+        case CHANNEL_1: 
+            afeCore.ch1_cal.pScaling[ afeCore.ch1_range ] = positive; 
+            afeCore.ch1_cal.nScaling[ afeCore.ch1_range ] = negative; 
+            break;
+
+        case CHANNEL_2:
+            afeCore.ch2_cal.pScaling[ afeCore.ch2_range ] = positive; 
+            afeCore.ch2_cal.nScaling[ afeCore.ch2_range ] = negative; 
+            break;
+
+        default: return CHANNEL_INVALID; break;
+    }
+}
+
+//////////////////////////////////////
+//////////////////////////////////////
+
+// Sets the calibration scaling for the specified channel
+afeErr_t afeCore_getScaling( float *positive, float *negative, 
+                             afeChannel_t channel )
+{
+    if( positive == NULL || negative == NULL ) { return NULL_PTR_ERR; }
+
+    switch( channel )
+    {
+        case CHANNEL_1: 
+            *positive = afeCore.ch1_cal.pScaling[ afeCore.ch1_range ]; 
+            *negative = afeCore.ch1_cal.nScaling[ afeCore.ch1_range ]; 
+            break;
+
+        case CHANNEL_2:
+            *positive = afeCore.ch2_cal.pScaling[ afeCore.ch2_range ]; 
+            *negative = afeCore.ch2_cal.nScaling[ afeCore.ch2_range ]; 
+            break;
+
+        default: return CHANNEL_INVALID; break;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+void afeCore_resetCalibration(void)
+{
+    for( uint32_t i = 0; i < LAST_RANGE; i++ )
+    {
+        // CH1
+        afeCore.ch1_cal.zeroOffset[i] = 0;
+        afeCore.ch1_cal.pScaling[i] = 0.0;
+        afeCore.ch1_cal.nScaling[i] = 0.0;
+        // CH2
+        afeCore.ch2_cal.zeroOffset[i] = 0;
+        afeCore.ch2_cal.pScaling[i] = 0.0;
+        afeCore.ch2_cal.nScaling[i] = 0.0;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -460,12 +584,12 @@ afeErr_t afeCore_setChannelRange( afeRange_t range, afeChannel_t channel )
     if( channel == CHANNEL_1 )
     {
         afeCore.ch1_range = range;
-        gpio_set_level( (gpio_num_t)CH1_RANGE_SEL, range == RANGE_15V ? 1 : 0 );
+        gpio_set_level( (gpio_num_t)CH1_RANGE_SEL, range == RANGE_15V ? 0 : 1 );
     }
     else if( channel == CHANNEL_2 )
     {
         afeCore.ch2_range = range;
-        gpio_set_level( (gpio_num_t)CH2_RANGE_SEL, range == RANGE_15V ? 1 : 0 );
+        gpio_set_level( (gpio_num_t)CH2_RANGE_SEL, range == RANGE_15V ? 0 : 1 );
     }
 
 }
@@ -517,11 +641,24 @@ uint32_t afeCore_getTriggerBuffer( uint16_t *ch1_buffer, uint16_t *ch2_buffer,
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-// Takes in a sample and converts it to voltage.
-// Returns the voltage as double
-double afeCore_convertSampleToVoltage( uint16_t sample )
-{
+static const double ADC_RESOLUTION = 3.3 / (0xFFF-1);
+static const double RANGE_5V_MULT = 1 / 0.3;
+static const double RANGE_15V_MULT = 1 / 0.1;
 
+// Takes in a sample and converts it to voltage. Returns the voltage as double. 
+// ( does not apply calibration nor inversion ). Returns 0.0 if range invalid.
+double afeCore_convertSampleToVoltage( int32_t sample, afeRange_t range )
+{
+    if( range >= LAST_RANGE ){ return 0.0; }
+
+    // Convert value to voltage
+    double temp = sample * ADC_RESOLUTION;
+
+    // Multiply by the inverse of frontend gain
+    if( range == RANGE_5V )         { temp *= RANGE_5V_MULT; }
+    else if( range == RANGE_15V )   { temp *= RANGE_15V_MULT; }
+
+    return temp;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
