@@ -124,7 +124,7 @@ LOCAL void readCalibrationData(void)
     {
         // Data to be stored
         data = i == 0 ? &afeCore.ch1_cal : &afeCore.ch2_cal;
-        size_t size = sizeof(data);
+        size_t size = sizeof( afeChannelCal_t );
 
         // Key for nvs key value pair system
         const char * key = i == 0 ? ch1_storageKey : ch2_storageKey;
@@ -163,20 +163,19 @@ void writeCalibrationData(void)
     {
         // Data to be stored
         data = i == 0 ? &afeCore.ch1_cal : &afeCore.ch2_cal;
-        size_t size = sizeof(data);
+        size_t size = sizeof( afeChannelCal_t );
 
         // Key for nvs key value pair system
         const char * key = i == 0 ? ch1_storageKey : ch2_storageKey;
 
         // Prepare data
         nvs_set_blob( handle, key, data, size );
-
-        // Write data
-        nvs_commit( handle );
     }
 
-    nvs_close( handle );
+    // Write both structs at once
+    nvs_commit( handle );
 
+    nvs_close( handle );
 }
 
 //////////////////////////////////////
@@ -325,6 +324,7 @@ double afeCore_getCalibratedVoltage( afeChannel_t channel )
         case CHANNEL_1:
             adc_oneshot_read( afeCore_getChannelAdcHandle(CHANNEL_1), CH1_VOLTAGE, &sample );
             sample += afeCore.ch1_cal.zeroOffset[ afeCore.ch1_range ];
+            sample *= -1;
             sample *= sample < 0 ? afeCore.ch1_cal.nScaling[ afeCore.ch1_range ] : afeCore.ch1_cal.pScaling[ afeCore.ch1_range ];
             voltage = afeCore_convertSampleToVoltage( sample, afeCore.ch1_range );
             break;
@@ -332,6 +332,7 @@ double afeCore_getCalibratedVoltage( afeChannel_t channel )
         case CHANNEL_2:
             adc_oneshot_read( afeCore_getChannelAdcHandle(CHANNEL_2), CH2_VOLTAGE, &sample );
             sample += afeCore.ch2_cal.zeroOffset[ afeCore.ch2_range ];
+            sample *= -1;
             sample *= sample < 0 ? afeCore.ch2_cal.nScaling[ afeCore.ch2_range ] : afeCore.ch2_cal.pScaling[ afeCore.ch2_range ];
             voltage = afeCore_convertSampleToVoltage( sample, afeCore.ch2_range );
             break;

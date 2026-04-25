@@ -38,7 +38,7 @@
     #define LOCAL   static inline
 #endif
 
-#define SAMPLE_MULTIPLIER   2
+#define SAMPLE_MULTIPLIER   4
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -50,6 +50,30 @@ static bool isCalibrationDone = false;
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+
+LOCAL void drawVoltage(void)
+{
+    static char ch1_string[20] = {"\0"};
+    static char ch2_string[20] = {"\0"};
+
+    double ch1_voltage = afeCore_getCalibratedVoltage( CHANNEL_1 );
+    double ch2_voltage = afeCore_getCalibratedVoltage( CHANNEL_2 );
+
+    tft.setTextSize( TFT_SMALL );
+
+    // Remove old text
+    tft.setTextColor( TFT_BLACK );
+    tft.drawString( ch1_string, RESOLUTION_X / 6, 9*yOffset);
+    tft.drawString( ch2_string, RESOLUTION_X * 5 / 6, 9*yOffset);
+    tft.setTextColor( TFT_WHITE );
+
+    std::snprintf( ch1_string, sizeof(ch1_string), "CH1: %.2lf", ch1_voltage );
+    std::snprintf( ch2_string, sizeof(ch2_string), "CH2: %.2lf", ch2_voltage );
+
+    tft.drawString( ch1_string, RESOLUTION_X / 6, 9*yOffset);
+    tft.drawString( ch2_string, RESOLUTION_X * 5 / 6, 9*yOffset);
+    tft.setTextSize( TFT_MEDIUM );
+}
 
 LOCAL void exitIf( uint32_t arg )
 {
@@ -78,6 +102,7 @@ LOCAL void handleInputs( QueueHandle_t q )
         hmiEventData_t e = getinputs( q );
         exitIf( e.inputs & BTN_ESC );
         if( e.inputs & BTN_ENTER ) { return; }
+        drawVoltage();
     }
 }
 
@@ -161,7 +186,7 @@ LOCAL void calibrateRange( QueueHandle_t q, afeRange_t range )
     double ch2_pScaling = 0.0, ch2_nScaling = 0.0;
     char ch1_scalingStr[20], ch2_scalingStr[20];
 
-    // Calibrate both +RANGE ( i == 0 ) and -RANGEV ( i == 1 )
+    // Calibrate both +RANGE ( i == 0 ) and -RANGE ( i == 1 )
     for( uint32_t i = 0; i < 2; i++ )
     {
         tft.fillScreen( TFT_BLACK );
@@ -175,7 +200,7 @@ LOCAL void calibrateRange( QueueHandle_t q, afeRange_t range )
         }
         else if( i == 0 && range == RANGE_5V )
         {
-            tft.drawString( "Supply +4V to each input,", xMidPoint, 2*yOffset );
+            tft.drawString( "Supply +3V to each input,", xMidPoint, 2*yOffset );
         }
         else if( i == 1 && range == RANGE_15V )
         {
@@ -183,7 +208,7 @@ LOCAL void calibrateRange( QueueHandle_t q, afeRange_t range )
         }
         else if( i == 1 && range == RANGE_5V )
         {
-            tft.drawString( "Supply -4V to each input,", xMidPoint, 2*yOffset );
+            tft.drawString( "Supply -3V to each input,", xMidPoint, 2*yOffset );
         }
         else
         {
@@ -252,7 +277,7 @@ LOCAL void calibrateRange( QueueHandle_t q, afeRange_t range )
 
         if( i == 0 )    
         { 
-            double expected = ( range == RANGE_15V ? 12.0 : 4.0 );
+            double expected = ( range == RANGE_15V ? 12.0 : 3.0 );
             ch1_pScaling = expected / ch1_voltage;
             ch2_pScaling = expected / ch2_voltage;
 
@@ -266,7 +291,7 @@ LOCAL void calibrateRange( QueueHandle_t q, afeRange_t range )
         }
         else            
         { 
-            double expected = ( range == RANGE_15V ? -12.0 : -4.0 );
+            double expected = ( range == RANGE_15V ? -12.0 : -3.0 );
             ch1_nScaling = expected / ch1_voltage;
             ch2_nScaling = expected / ch2_voltage;
 
@@ -369,9 +394,17 @@ void afeCore_calibrationTask( void* pvParameter )
         double ch1_voltage = afeCore_getCalibratedVoltage( CHANNEL_1 );
         double ch2_voltage = afeCore_getCalibratedVoltage( CHANNEL_2 );
 
-        char ch1_string[20];
-        char ch2_string[20];
-        char string3[60];
+        static char ch1_string[20] = {"\0"};
+        static char ch2_string[20] = {"\0"};
+        static char string3[60] = {"\0"};
+
+        tft.setTextSize( TFT_SMALL );
+
+        // Remove old text
+        tft.setTextColor( TFT_BLACK );
+        tft.drawString( ch1_string, RESOLUTION_X / 4, 9*yOffset);
+        tft.drawString( ch2_string, RESOLUTION_X * 3 / 4, 9*yOffset);
+        tft.setTextColor( TFT_WHITE );
 
         std::snprintf( ch1_string, sizeof(ch1_string), "CH1: %.2lf", ch1_voltage );
         std::snprintf( ch2_string, sizeof(ch2_string), "CH2: %.2lf", ch2_voltage );
@@ -379,9 +412,8 @@ void afeCore_calibrationTask( void* pvParameter )
         std::snprintf( string3, sizeof(string3), "CH1_voltage: %.2lf, CH2_voltage: %.2lf\r\n", ch1_voltage, ch2_voltage );
         Serial.print(string3);  
 
-        tft.setTextSize( TFT_SMALL );
         tft.drawString( ch1_string, RESOLUTION_X / 4, 9*yOffset);
-        tft.drawString( ch1_string, RESOLUTION_X * 3 / 4, 9*yOffset);
+        tft.drawString( ch2_string, RESOLUTION_X * 3 / 4, 9*yOffset);
         tft.setTextSize( TFT_MEDIUM );
     }
     isCalibrationDone = false;

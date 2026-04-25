@@ -36,22 +36,24 @@
 // CH1 => ADC2, CH2 => ADC1
 
 // Pin numbers for the analog frontends
-#define CH1_RANGE_SEL   26
+#define CH1_RANGE_SEL       26
 // Physical pin
-//#define CH1_VOLTAGE     25
+//#define CH1_VOLTAGE       25
 // ADC channel
-#define CH1_VOLTAGE     ADC_CHANNEL_8
-//#define CH1_VOLTAGE     ADC2_CHANNEL_8
+#define CH1_VOLTAGE         ADC_CHANNEL_8
+//#define CH1_VOLTAGE       ADC2_CHANNEL_8
 
-#define CH2_RANGE_SEL   21
+#define CH2_RANGE_SEL       21
 // Physical pin
-//#define CH2_VOLTAGE     33
+//#define CH2_VOLTAGE       33
 // ADC channel
-#define CH2_VOLTAGE     ADC_CHANNEL_5
-//#define CH2_VOLTAGE     ADC1_CHANNEL_5
+#define CH2_VOLTAGE         ADC_CHANNEL_5
+//#define CH2_VOLTAGE       ADC1_CHANNEL_5
 
 // Number of values stored in ch1 and ch2 sample buffer
-#define SAMPLE_BUFFER_SIZE 10
+#define SAMPLE_BUFFER_SIZE  10
+
+#define SAMPLE_RATE         1000
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
