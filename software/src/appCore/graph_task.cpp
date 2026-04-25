@@ -43,12 +43,14 @@ typedef struct {
 } RingBuffer;
 
 typedef struct {
-  float x_zoom;
   float y_zoom;
-
-  int32_t x_offset;
   int32_t y_offset;
 } ViewState;
+
+typedef struct {
+  float x_zoom;
+  int32_t x_offset;
+} Timebase;
 
 typedef struct {
   bool stop = false;
@@ -100,17 +102,18 @@ RingBuffer copy_rb_ch2{};
 
 ChannelState ch_states{};
 
-ViewState ch1_view = {
+Timebase timebase = {
   .x_zoom = 2.0,
+  .x_offset = 0
+};
+
+ViewState ch1_view = {
   .y_zoom = 1.0,
-  .x_offset = 0,
   .y_offset = 2385
 };
 
 ViewState ch2_view = {
-  .x_zoom = 2.0,
   .y_zoom = 1.0,
-  .x_offset = 0,
   .y_offset = 2385
 };
 
@@ -238,9 +241,9 @@ void apply_autoset(RingBuffer *rb, ViewState *view) {
   float desired_cycles = 3.0f;
   float samples_per_screen = avg_period * desired_cycles;
   
-  view->x_zoom = (uint16_t)(samples_per_screen / (float)RESOLUTION_X + 0.5f);
+  timebase.x_zoom = (uint16_t)(samples_per_screen / (float)RESOLUTION_X + 0.5f);
 
-  view->x_offset = 0;
+  timebase.x_offset = 0;
 }
 
 void autoset() {
@@ -288,7 +291,7 @@ void trigger_logic() {
   RingBuffer* rb = (trigger.selected_channel == CHANNEL_1) ? &rb_ch1 : &rb_ch2;
   ViewState *view_ptr = (trigger.selected_channel == CHANNEL_1) ? &ch1_view : &ch2_view;
   bool trigger_activated = false;
-  int start_value = RESOLUTION_X / 2 * view_ptr->x_zoom;
+  int start_value = RESOLUTION_X / 2 * timebase.x_zoom;
 
 	for (int i = start_value; i < BUF_LEN + start_value; ++i) {
 		size_t index = (rb->write_head - i + 2 * BUF_LEN) % BUF_LEN;
@@ -329,8 +332,8 @@ void draw_trigger(afeChannel_t ch, uint32_t color) {
   if (trigger.is_triggered) {
     int32_t sample_index =
     head_snapshot
-    - view.x_offset
-    - (int32_t)(i * view.x_zoom);
+    - timebase.x_offset
+    - (int32_t)(i * timebase.x_zoom);
     uint16_t val = rb_ptr->samples[rb_ptr->read_head];
 
     float adjusted = (val - view_ptr->y_offset) * view_ptr->y_zoom + 0.5f;
@@ -361,8 +364,8 @@ void draw_graph(RingBuffer *rb, ViewState view, int32_t color) {
 
     int32_t sample_index =
       head_snapshot
-      - view.x_offset
-      - (int32_t)(i * view.x_zoom);
+      - timebase.x_offset
+      - (int32_t)(i * timebase.x_zoom);
 
     while (sample_index < 0)
       sample_index += BUF_LEN;
@@ -388,7 +391,7 @@ void draw_graph(RingBuffer *rb, ViewState view, int32_t color) {
 }
 /*
     if (i == 0 && trigger.is_triggered) {
-      tft.drawFastVLine(view.x_offset * view.x_zoom, 0, RESOLUTION_Y, color);
+      tft.drawFastVLine(timebase.x_offset * timebase.x_zoom, 0, RESOLUTION_Y, color);
     }
 */
 void update_grid() {
@@ -489,10 +492,10 @@ void button_logic(ViewState *view) {
         view->y_zoom *= 0.9;
         update_grid();
       } else if (inputs & BTN_RIGHT) {
-        view->x_zoom *= 0.9;
+        timebase.x_zoom *= 0.9;
         update_grid();
       } else if (inputs & BTN_LEFT) {
-        view->x_zoom *= 1.1;
+        timebase.x_zoom *= 1.1;
         update_grid();
       }
       break;
@@ -505,10 +508,10 @@ void button_logic(ViewState *view) {
         view->y_offset += (uint16_t)(16.0f / view->y_zoom + 0.5f);
         update_grid();
       } else if (inputs & BTN_RIGHT) {
-        view->x_offset += (uint16_t)(32.0f * view->x_zoom + 0.5f);
+        timebase.x_offset += (uint16_t)(32.0f * timebase.x_zoom + 0.5f);
         update_grid();
       } else if (inputs & BTN_LEFT) {
-        view->x_offset -= (uint16_t)(32.0f * view->x_zoom + 0.5f);
+        timebase.x_offset -= (uint16_t)(32.0f * timebase.x_zoom + 0.5f);
         update_grid();
       }
       break;
@@ -529,8 +532,8 @@ void button_logic(ViewState *view) {
         break;
   }
 
-  if (view->x_zoom < 0.1) view->x_zoom = 0.1;
-  if (view->x_zoom > 20)  view->x_zoom = 20;
+  if (timebase.x_zoom < 0.1) timebase.x_zoom = 0.1;
+  if (timebase.x_zoom > 20)  timebase.x_zoom = 20;
 
   if (view->y_zoom < 0.1) view->y_zoom = 0.1;
   if (view->y_zoom > 20)  view->y_zoom = 20;
