@@ -51,6 +51,7 @@ typedef struct {
 } ViewState;
 
 typedef struct {
+  bool stop = false;
   afeChannel_t ch_selected = CHANNEL_1;
   bool ch1_active = true;
   bool ch2_active = true;
@@ -87,6 +88,9 @@ TaskHandle_t adc;
 
 RingBuffer rb_ch1{};
 RingBuffer rb_ch2{};
+
+RingBuffer copy_rb_ch1{};
+RingBuffer copy_rb_ch2{};
 
 ChannelState ch_states{};
 
@@ -130,16 +134,18 @@ void add_sample(uint16_t val, RingBuffer *rb) {
 
 void adc_task(void *pvParameters) {
 	while (true) {
+    RingBuffer *ch1_ptr = ch_states.stop ? &copy_rb_ch1 : &rb_ch1;
+    RingBuffer *ch2_ptr = ch_states.stop ? &copy_rb_ch2 : &rb_ch2;
     if (ch_states.ch1_active) {
       int ch1_reading;
       adc_oneshot_read( afeCore_getChannelAdcHandle( CHANNEL_1 ), ADC_CHANNEL_8, &ch1_reading );
-      if ( afeCore_isChannel1Disabled() ) add_sample(0, &rb_ch1);
-      else add_sample((uint16_t)ch1_reading, &rb_ch1);
+      if ( afeCore_isChannel1Disabled() ) add_sample(0, ch1_ptr);
+      else add_sample((uint16_t)ch1_reading, ch1_ptr);
     }
     if (ch_states.ch2_active) {
       int ch2_reading; 
       adc_oneshot_read( afeCore_getChannelAdcHandle( CHANNEL_2 ), ADC_CHANNEL_5, &ch2_reading );
-      add_sample((uint16_t)ch2_reading, &rb_ch2);
+      add_sample((uint16_t)ch2_reading, ch2_ptr);
     }
 
 		vTaskDelay(pdMS_TO_TICKS(1));
@@ -161,7 +167,7 @@ float get_voltage(int y, ViewState view) {
   if (view.y_zoom == 0.0f)
     return 0;
 
-  float adjusted = (float)(RESOLUTION_Y - y);
+  float adjusted = (float)(RESOLUTION_Y / 2 - y);
   float val = (adjusted / view.y_zoom) + view.y_offset;
 
   if (val < 0.0f) val = 0.0f;
@@ -226,6 +232,26 @@ void autoset() {
   }
   if (ch_states.ch_selected == CHANNEL_2 && ch_states.ch2_active) {
     apply_autoset(&rb_ch2, &ch2_view);
+  }
+}
+
+void run() {
+  ch_states.stop = false;
+  rb_ch1 = copy_rb_ch1;
+  rb_ch2 = copy_rb_ch2;
+}
+
+void stop() {
+  ch_states.stop = true;
+  copy_rb_ch1 = rb_ch1;
+  copy_rb_ch2 = rb_ch2;
+}
+
+void toggle_run_stop() {
+  if (ch_states.stop == true) {
+    run();
+  } else {
+    stop();
   }
 }
 
@@ -296,7 +322,7 @@ void draw_graph(RingBuffer *rb, ViewState view, int32_t color) {
 
     uint16_t val = rb->samples[sample_index];
 
-    float adjusted = (val - view.y_offset) * view.y_zoom;
+    float adjusted = (val - view.y_offset) * view.y_zoom + 0.5f;
 
     int y = RESOLUTION_Y / 2 - (int)adjusted;
 
@@ -362,6 +388,8 @@ void button_logic(ViewState *view) {
     state = State::MEASURE;
   } else if ( inputs & BTN_AUTOSET ) {
     autoset();
+  } else if ( inputs & BTN_STOP ) {
+    toggle_run_stop();
   } else if ( inputs & BTN_CURSORS ) {
     if (state == State::CURSOR) {
       cursor_1.en = !cursor_1.en;
@@ -508,11 +536,11 @@ void oscilloscope_task(void *pvParameters) {
 
 /*
 Todo:
-Autoset
 Run/stop
 Measure
 Cursors
 Trigger settings
 Math
+Voltage scaling y zoom fix
 Time values for x-axis
 */
