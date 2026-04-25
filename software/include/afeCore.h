@@ -51,7 +51,7 @@
 //#define CH2_VOLTAGE       ADC1_CHANNEL_5
 
 // Number of values stored in ch1 and ch2 sample buffer
-#define SAMPLE_BUFFER_SIZE  10
+#define SAMPLE_BUFFER_SIZE  10000
 
 #define SAMPLE_RATE         1000
 
@@ -222,8 +222,8 @@ extern uint32_t afeCore_getSampleRate(void);
 // Takes the buffers where samples are copied to and the number of wanted 
 // samples. Both buffers should be the same size and their length should 
 // not exceed the given n. Returns the number of samples actually copied
-extern uint32_t afeCore_getNewestSamples( int32_t *ch1_buffer, 
-                                          int32_t *ch2_buffer, 
+extern uint32_t afeCore_getNewestSamples( uint16_t *ch1_buffer, 
+                                          uint16_t *ch2_buffer,
                                           uint32_t n );
 
 // Copies samples from sample buffer to the given trigger buffer from
@@ -266,6 +266,8 @@ extern afeErr_t afeCore_setScaling( float positive, float negative,
                                     afeChannel_t channel );
 extern afeErr_t afeCore_getScaling( float *positive, float *negative, 
                                     afeChannel_t channel );
+
+extern void printStr( const char *str );
 
 #ifdef __cplusplus
 }

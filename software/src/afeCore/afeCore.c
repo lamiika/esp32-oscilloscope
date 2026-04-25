@@ -32,11 +32,22 @@
 
 #include <afeCore.h>
 
+#include <graph_task.h>
+
 // non volatile storage controller for calibration data
 #include "nvs_flash.h"
 #include "nvs.h"
 
 #include "driver/gpio.h"
+
+#include "driver/gptimer.h"
+#include "soc/sens_reg.h"
+#include "soc/sens_struct.h"
+#include "esp_attr.h"
+
+#include "esp_adc/adc_continuous.h"
+#include "esp_adc/adc_cali.h"
+#include "esp_adc/adc_cali_scheme.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -97,8 +108,164 @@ afeCore_t afeCore =
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
+static const size_t g_frame_size = 256;
+
+// Called from ISR context when DMA has new ADC data
+static bool IRAM_ATTR adc_convDoneCallback( adc_continuous_handle_t handle,
+                                            const adc_continuous_evt_data_t *edata,
+                                            void *user_ctx )
+{
+    // edata->size gives number of bytes available
+    // edata->buf is the DMA buffer pointer
+    const uint8_t *data = edata->conv_frame_buffer;
+    size_t len = g_frame_size;
+
+
+    // Example: iterate through samples
+    for( size_t i = 0; i < len; i += sizeof(adc_digi_output_data_t) ) 
+    {
+        const adc_digi_output_data_t *sample =
+            (const adc_digi_output_data_t *)&data[i];
+
+        // Extract unit, channel, and raw value
+        uint8_t unit = sample->type2.unit;
+        uint8_t channel = sample->type2.channel;
+        uint16_t value = sample->type2.data;
+
+        // ADC 1
+        if( unit == 0 )
+        {
+            add_sample( value, CHANNEL_2 );
+        }
+        // ADC 2
+        else if( unit == 1 )
+        {
+            add_sample( value, CHANNEL_1 );
+        }
+        
+    }
+
+    // Return true to yield from ISR if needed (FreeRTOS)
+    return false;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+// static inline uint16_t IRAM_ATTR channel2_readRaw(void)
+// {
+//     // uint16_t result = 0;
+
+//     // // If previous conversion finished, read it
+//     // if( SENS.sar_meas_start1.meas1_done_sar ) 
+//     // {
+//     //     result = SENS.sar_meas_start1.meas1_data_sar;
+//     //     // Start next conversion (always)
+//     //     SENS.sar_meas_start1.meas1_start_sar = 1;
+//     // }
+
+//     // return result;
+
+//     uint16_t result = 0;
+
+//     if (SENS.sar_start_force.sar1_done) 
+//     {
+//         result = SENS.sar_start_force.sar1_data;
+//         SENS.sar_start_force.sar1_start_force = 1;
+//     }
+
+//     return result;
+// }
+
+// //////////////////////////////////////
+// //////////////////////////////////////
+
+// static inline uint16_t IRAM_ATTR channel1_readRaw(void)
+// {
+//     // uint16_t result = 0;
+
+//     // // If previous conversion finished, read it
+//     // if( SENS.sar_meas_start2.meas2_done_sar ) 
+//     // {
+//     //     result = SENS.sar_meas_start2.meas2_data_sar;
+//     //     // Start next conversion (always)
+//     //     SENS.sar_meas_start2.meas2_start_sar = 1;
+//     // }
+
+//     // return result;
+//     uint16_t result = 0;
+
+//     if (SENS.sar_start_force.sar2_done) 
+//     {
+//         result = SENS.sar_start_force.sar2_data;
+//         SENS.sar_start_force.sar2_start_force = 1;
+//     }
+
+//     return result;
+// }
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
 // Interrupt service routine used to sample the adcs
-LOCAL void hardwareTimerISR(void);
+static bool IRAM_ATTR timer2_isrCallback( gptimer_handle_t timer, 
+                                          const gptimer_alarm_event_data_t *edata, 
+                                          void *user_ctx)
+{
+    // afeCore.ch1_sampleBuffer[afeCore.currentSampleIndex] = channel1_readRaw();
+    // afeCore.ch2_sampleBuffer[afeCore.currentSampleIndex] = channel2_readRaw();
+
+    // if( ++afeCore.currentSampleIndex >= SAMPLE_BUFFER_SIZE )
+    // {
+    //     afeCore.currentSampleIndex = 0;
+    // }
+
+    // return true to re-enable the alarm
+    return true;  
+}
+
+//////////////////////////////////////
+//////////////////////////////////////
+
+#define TIMER_GROUP         TIMER_GROUP_1
+#define TIMER_NUM           TIMER_0
+
+// 80 MHz / 80 = 1 MHz timer clock
+#define TIMER_DIVIDER       80      
+// 100 µs => 10 kHz  
+#define TIMER_INTERVAL_US   100     
+
+LOCAL void timer2_configure(void)
+{
+    gptimer_handle_t gptimer = NULL;
+
+    gptimer_config_t config = 
+    {
+        // 80 MHz APB clock
+        .clk_src = GPTIMER_CLK_SRC_DEFAULT,   
+        .direction = GPTIMER_COUNT_UP,
+        // 1 MHz → 1 tick = 1 µs
+        .resolution_hz = 1000000,             
+    };
+
+    gptimer_new_timer(&config, &gptimer);
+
+    gptimer_event_callbacks_t cbs = { .on_alarm = timer2_isrCallback };
+    gptimer_register_event_callbacks( gptimer, &cbs, NULL );
+
+    // Set alarm to 100 µs => 10 kHz
+    gptimer_alarm_config_t alarm_config = 
+    {
+        // 100 ticks = 100 µs
+        .alarm_count = 100,       
+        .reload_count = 0,
+        .flags.auto_reload_on_alarm = true,
+    };
+    gptimer_set_alarm_action( gptimer, &alarm_config );
+
+    gptimer_enable( gptimer );
+    gptimer_start( gptimer );
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -346,6 +513,117 @@ double afeCore_getCalibratedVoltage( afeChannel_t channel )
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
+LOCAL void adc_init_oneshot(void)
+{
+    adc_oneshot_chan_cfg_t chan_cfg = 
+    {
+        // 12‑bit resolution 
+        .bitwidth = ADC_BITWIDTH_DEFAULT,   
+        // Full scale input (0-3.3V)
+        .atten = ADC_ATTEN_DB_12,           
+    };
+
+    // ADC1 INIT
+    // adc_oneshot_unit_init_cfg_t adc1_cfg = 
+    // {
+    //     .unit_id = ADC_UNIT_1,
+    //     .clk_src = ADC_DIGI_CLK_SRC_DEFAULT,
+    //     .ulp_mode = ADC_ULP_MODE_DISABLE,
+    // };
+
+    // adc_oneshot_new_unit( &adc1_cfg, &afeCore.ch2_handle );
+    // adc_oneshot_config_channel( afeCore.ch2_handle, CH2_VOLTAGE, &chan_cfg );
+
+    // ADC2 INIT
+    adc_oneshot_unit_init_cfg_t adc2_cfg = 
+    {
+        .unit_id = ADC_UNIT_2,
+        .clk_src = ADC_DIGI_CLK_SRC_DEFAULT,
+        .ulp_mode = ADC_ULP_MODE_DISABLE,
+    };
+    adc_oneshot_new_unit( &adc2_cfg, &afeCore.ch1_handle );
+    adc_oneshot_config_channel( afeCore.ch1_handle, CH1_VOLTAGE, &chan_cfg );
+}
+
+//////////////////////////////////////
+//////////////////////////////////////
+
+LOCAL void adc_init_continuous(void)
+{
+    // adc_continuous_handle_t handle;
+
+    // adc_continuous_config_t cfg = 
+    // {
+    //     .max_store_buf_size = 1024,
+    //     .conv_frame_size = 256,
+    //     .format = ADC_DIGI_OUTPUT_FORMAT_TYPE2,
+    //     // Use ADC1 + ADC2
+    //     .conv_mode = ADC_CONV_BOTH_UNIT,   
+    //     .sample_freq_hz = 20000,
+    //     .pattern_num = 2,
+    //     .adc_pattern = {
+    //     {
+    //         .unit = ADC_UNIT_1,
+    //         .channel = CH2_VOLTAGE,
+    //         .atten = ADC_ATTEN_DB_12,
+    //         .bit_width = SOC_ADC_DIGI_MAX_BITWIDTH,
+    //     },
+    //     {
+    //         .unit = ADC_UNIT_2,
+    //         .channel = CH1_VOLTAGE,
+    //         .atten = ADC_ATTEN_DB_12,
+    //         .bit_width = SOC_ADC_DIGI_MAX_BITWIDTH,
+    //     }
+    // }
+    // };
+
+    // adc_continuous_evt_cbs_t cbs = { .on_conv_done = adc_convDoneCallback };
+
+    // adc_continuous_new_handle( &cfg, &handle );
+    // adc_continuous_register_event_callbacks( handle, &cbs, NULL );
+    // adc_continuous_start( handle );
+
+    adc_continuous_handle_t handle;
+
+    adc_continuous_handle_cfg_t handle_cfg = {
+        .max_store_buf_size = 1024,
+        .conv_frame_size = g_frame_size,
+    };
+
+    ESP_ERROR_CHECK(adc_continuous_new_handle(&handle_cfg, &handle));
+
+    adc_digi_pattern_config_t pattern[] = {
+        {
+            .atten = ADC_ATTEN_DB_12,
+            .channel = CH2_VOLTAGE,   // ADC1 CH5 (GPIO33)
+            .unit = ADC_UNIT_1,
+            .bit_width = SOC_ADC_DIGI_MAX_BITWIDTH,
+        },
+    };
+
+    adc_continuous_config_t dig_cfg = {
+        .pattern_num = 1,
+        .sample_freq_hz = 20000,
+        .adc_pattern = pattern,
+        .conv_mode = ADC_CONV_SINGLE_UNIT_1,
+        .format = ADC_DIGI_OUTPUT_FORMAT_TYPE2,
+    };
+
+    ESP_ERROR_CHECK(adc_continuous_config(handle, &dig_cfg));
+
+    adc_continuous_evt_cbs_t cbs = {
+        .on_conv_done = adc_convDoneCallback,
+    };
+
+    ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(handle, &cbs, NULL));
+
+    ESP_ERROR_CHECK(adc_continuous_start(handle));
+
+}
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
 // Initializes afeCore and configures hardware timerX for use in this library
 void afeCore_init(void)
 {
@@ -361,39 +639,15 @@ void afeCore_init(void)
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
-    esp_err_t err = gpio_config( &outputConfig );
+    gpio_config( &outputConfig );
 
     afeCore_setChannelRange( RANGE_15V, CHANNEL_1 );
     afeCore_setChannelRange( RANGE_15V, CHANNEL_2 );
 
-    adc_oneshot_chan_cfg_t chan_cfg = 
-    {
-        // 12‑bit resolution 
-        .bitwidth = ADC_BITWIDTH_DEFAULT,   
-        // Full scale input (0-3.3V)
-        .atten = ADC_ATTEN_DB_12,           
-    };
+    adc_init_oneshot();
+    adc_init_continuous();
 
-    // ADC1 INIT
-    adc_oneshot_unit_init_cfg_t adc1_cfg = 
-    {
-        .unit_id = ADC_UNIT_1,
-        .clk_src = ADC_DIGI_CLK_SRC_DEFAULT,
-        .ulp_mode = ADC_ULP_MODE_DISABLE,
-    };
-
-    adc_oneshot_new_unit( &adc1_cfg, &afeCore.ch2_handle );
-    adc_oneshot_config_channel( afeCore.ch2_handle, CH2_VOLTAGE, &chan_cfg );
-
-    // ADC2 INIT
-    adc_oneshot_unit_init_cfg_t adc2_cfg = 
-    {
-        .unit_id = ADC_UNIT_2,
-        .clk_src = ADC_DIGI_CLK_SRC_DEFAULT,
-        .ulp_mode = ADC_ULP_MODE_DISABLE,
-    };
-    adc_oneshot_new_unit( &adc2_cfg, &afeCore.ch1_handle );
-    adc_oneshot_config_channel( afeCore.ch1_handle, CH1_VOLTAGE, &chan_cfg );
+    timer2_configure();
 
     afeCore.isInitialized = true;
 }
@@ -573,11 +827,54 @@ uint32_t afeCore_getSampleRate(void)
 
 // Takes the buffers where samples are copied to and the number of wanted
 // samples. Both buffers should be the same size and their length should
-// not exceed the given n. Returns the number of samples actually copied
-uint32_t afeCore_getNewestSamples( int32_t *ch1_buffer, int32_t *ch2_buffer,
+// not exceed the given n. 
+uint32_t afeCore_getNewestSamples( uint16_t *ch1_buffer, uint16_t *ch2_buffer,
                                    uint32_t n )
 {
+    char tempStr[60];
 
+    if( ch1_buffer == NULL && ch2_buffer == NULL ) { return 0; }
+
+    static uint32_t startIndex = 0;
+
+    uint32_t temp2 = afeCore.currentSampleIndex;
+    int32_t temp = (temp2 + 1) - n;
+
+    // We want to read more values than the currentSampleIndex 
+    // is so we need to start from the end of the buffer
+    if( temp < 0 ) 
+    { 
+        temp += SAMPLE_BUFFER_SIZE; 
+    }
+    // else
+    // {  
+    //     // We want to read more than have been 
+    //     // sampled between current and last read
+    //     if( startIndex + n > temp2 ) 
+    //     { 
+    //         // Number of samples that we want to read is 
+    //         // the number of samples taken since the last read
+    //         n = temp2 - startIndex;
+
+
+    //         if( startIndex + n > SAMPLE_BUFFER_SIZE )
+    //         {
+
+    //         }
+    //     }
+    // }
+
+    for( uint32_t i = 0; i < n; i++, temp++ )
+    {
+        ch1_buffer[i] = afeCore.ch1_sampleBuffer[temp];
+        ch2_buffer[i] = afeCore.ch2_sampleBuffer[temp];
+
+        snprintf( tempStr, sizeof(tempStr), "CH1: %d,\tCH2: %d,\tTemp: %ld", afeCore.ch1_sampleBuffer[temp], afeCore.ch2_sampleBuffer[temp], temp );
+
+        printStr(tempStr);
+
+        if( temp >= SAMPLE_BUFFER_SIZE ) { temp = 0; }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////

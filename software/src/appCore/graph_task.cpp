@@ -3,6 +3,8 @@
 /// Voltage grapher
 ///////////////////////////// 1.Libraries //////////////////////////////
 
+#include <graph_task.h>
+
 #include <esp32-oscilloscope.h>
 #include <hmiCore.h>
 #include "afeCore.h"
@@ -132,7 +134,13 @@ State state = State::TRIGGER;
 
 //////////////////////////// 5.2.Functions /////////////////////////////
 
-void add_sample(uint16_t val, RingBuffer *rb) {
+void add_sample( uint16_t val, afeChannel_t ch ) {
+
+  RingBuffer *ch1_ptr = ch_states.stop ? &copy_rb_ch1 : &rb_ch1;
+  RingBuffer *ch2_ptr = ch_states.stop ? &copy_rb_ch2 : &rb_ch2;
+
+  RingBuffer *rb = ch == CHANNEL_1 ? ch1_ptr : ch2_ptr;
+
 	rb->samples[rb->write_head] = ADC_RESOLUTION - 1 - val;
 	rb->write_head = (rb->write_head + 1) % BUF_LEN;
 }
@@ -142,20 +150,48 @@ void adc_task(void *pvParameters) {
   const TickType_t xPeriod = pdMS_TO_TICKS(1);
   xLastWakeTime = xTaskGetTickCount();
 
+  static const uint32_t TEMP_BUFF_SIZE = 2000;
+  static uint16_t ch1_tempBuffer[TEMP_BUFF_SIZE] = {};
+  static uint16_t ch2_tempBuffer[TEMP_BUFF_SIZE] = {};
+
+
 	while (true) {
-    RingBuffer *ch1_ptr = ch_states.stop ? &copy_rb_ch1 : &rb_ch1;
-    RingBuffer *ch2_ptr = ch_states.stop ? &copy_rb_ch2 : &rb_ch2;
-    if (ch_states.ch1_active) {
+    
+    // afeCore_getNewestSamples( ch1_tempBuffer, ch2_tempBuffer, TEMP_BUFF_SIZE );
+
+    if( ch_states.ch1_active ) 
+    {
       int ch1_reading;
-      adc_oneshot_read( afeCore_getChannelAdcHandle( CHANNEL_1 ), ADC_CHANNEL_8, &ch1_reading );
-      if ( afeCore_isChannel1Disabled() ) add_sample(0, ch1_ptr);
-      else add_sample((uint16_t)ch1_reading, ch1_ptr);
+      
+      if ( afeCore_isChannel1Disabled() )
+      {
+        //for( uint32_t i = 0; i < TEMP_BUFF_SIZE; i++ )
+        //{ 
+          //add_sample( 0, CHANNEL_1 ); 
+        //}
+        add_sample(0, CHANNEL_1);
+      } 
+      else 
+      {
+        //for( uint32_t i = 0; i < TEMP_BUFF_SIZE; i++ )
+        //{ 
+          //add_sample( ch1_tempBuffer[i], CHANNEL_1 ); 
+        //}
+        adc_oneshot_read( afeCore_getChannelAdcHandle( CHANNEL_1 ), ADC_CHANNEL_8, &ch1_reading );
+        add_sample((uint16_t)ch1_reading, CHANNEL_1);
+      } 
     }
-    if (ch_states.ch2_active) {
-      int ch2_reading; 
-      adc_oneshot_read( afeCore_getChannelAdcHandle( CHANNEL_2 ), ADC_CHANNEL_5, &ch2_reading );
-      add_sample((uint16_t)ch2_reading, ch2_ptr);
-    }
+
+    // if( ch_states.ch2_active ) 
+    // {
+    //   for( uint32_t i = 0; i < TEMP_BUFF_SIZE; i++ )
+    //   { 
+    //     add_sample( ch2_tempBuffer[i], CHANNEL_2 ); 
+    //   }
+    //   //int ch2_reading; 
+    //   //adc_oneshot_read( afeCore_getChannelAdcHandle( CHANNEL_2 ), ADC_CHANNEL_5, &ch2_reading );
+    //   //add_sample((uint16_t)ch2_reading, ch2_ptr);
+    // }
 
 		vTaskDelayUntil(&xLastWakeTime, xPeriod);
   }
