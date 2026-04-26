@@ -603,7 +603,7 @@ LOCAL void adc_init_continuous(void)
 
     adc_continuous_config_t dig_cfg = {
         .pattern_num = 1,
-        .sample_freq_hz = 20000,
+        .sample_freq_hz = SAMPLE_RATE,
         .adc_pattern = pattern,
         .conv_mode = ADC_CONV_SINGLE_UNIT_1,
         .format = ADC_DIGI_OUTPUT_FORMAT_TYPE2,
