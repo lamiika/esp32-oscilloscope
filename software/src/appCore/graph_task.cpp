@@ -24,6 +24,8 @@
 #define STR_LEN 20
 #define CH1_BUF_SIZE 1180
 #define CH2_BUF_SIZE (CH1_BUF_SIZE * 20)
+#define CH1_SAMPLE_RATE 1000
+#define CH2_SAMPLE_RATE 20000
 
 /////////////////////////////// 3.Types ////////////////////////////////
 
@@ -43,6 +45,8 @@ enum class State {
 typedef struct {
   float x_zoom;
   int32_t x_offset;
+  uint16_t required_sample_rate;
+  uint32_t time_per_div_us;
 } Timebase;
 
 typedef struct {
@@ -54,6 +58,7 @@ typedef struct {
 typedef struct {
   uint16_t *samples;
   uint32_t buffer_size;
+  uint16_t sample_rate;
   size_t write_head = 0;
   size_t read_head = 0;
 } RingBuffer;
@@ -119,7 +124,9 @@ TaskHandle_t adc;
 
 Timebase timebase = {
   .x_zoom = 2.0,
-  .x_offset = 0
+  .x_offset = 0,
+  .required_sample_rate = RESOLUTION_X / 2,
+  .time_per_div_us = GRID_OFFSET_X * 2 * 1000
 };
 
 ViewState ch1_view = {
@@ -140,12 +147,14 @@ uint16_t rb_ch2_storage[CH2_BUF_SIZE];
 RingBuffer rb_ch1{
   .samples = rb_ch1_storage,
   .buffer_size = CH1_BUF_SIZE,
+  .sample_rate = CH1_SAMPLE_RATE,
   .write_head = 0,
   .read_head = 0
 };
 RingBuffer rb_ch2{
   .samples = rb_ch2_storage,
   .buffer_size = CH2_BUF_SIZE,
+  .sample_rate = CH2_SAMPLE_RATE,
   .write_head = 0,
   .read_head = 0
 };
@@ -156,12 +165,14 @@ uint16_t copy_rb_ch2_storage[CH2_BUF_SIZE];
 RingBuffer copy_rb_ch1{
   .samples = copy_rb_ch1_storage,
   .buffer_size = CH1_BUF_SIZE,
+  .sample_rate = CH1_SAMPLE_RATE,
   .write_head = 0,
   .read_head = 0
 };
 RingBuffer copy_rb_ch2{
   .samples = copy_rb_ch2_storage,
   .buffer_size = CH2_BUF_SIZE,
+  .sample_rate = CH2_SAMPLE_RATE,
   .write_head = 0,
   .read_head = 0
 };
@@ -237,48 +248,21 @@ void adc_task(void *pvParameters) {
   const TickType_t xPeriod = pdMS_TO_TICKS(1);
   xLastWakeTime = xTaskGetTickCount();
 
-//  static const uint32_t TEMP_BUFF_SIZE = 2000;
-//  static uint16_t ch1_tempBuffer[TEMP_BUFF_SIZE] = {};
-//  static uint16_t ch2_tempBuffer[TEMP_BUFF_SIZE] = {};
-
-
 	while (true) {
-    
-    // afeCore_getNewestSamples( ch1_tempBuffer, ch2_tempBuffer, TEMP_BUFF_SIZE );
-
     if( ch_states.ch1_active ) 
     {
       int ch1_reading;
       
       if ( afeCore_isChannel1Disabled() )
       {
-        //for( uint32_t i = 0; i < TEMP_BUFF_SIZE; i++ )
-        //{ 
-          //add_sample( 0, CHANNEL_1 ); 
-        //}
         add_sample(0, CHANNEL_1);
       } 
       else 
       {
-        //for( uint32_t i = 0; i < TEMP_BUFF_SIZE; i++ )
-        //{ 
-          //add_sample( ch1_tempBuffer[i], CHANNEL_1 ); 
-        //}
         adc_oneshot_read( afeCore_getChannelAdcHandle( CHANNEL_1 ), ADC_CHANNEL_8, &ch1_reading );
         add_sample((uint16_t)ch1_reading, CHANNEL_1);
       } 
     }
-
-    // if( ch_states.ch2_active ) 
-    // {
-    //   for( uint32_t i = 0; i < TEMP_BUFF_SIZE; i++ )
-    //   { 
-    //     add_sample( ch2_tempBuffer[i], CHANNEL_2 ); 
-    //   }
-    //   //int ch2_reading; 
-    //   //adc_oneshot_read( afeCore_getChannelAdcHandle( CHANNEL_2 ), ADC_CHANNEL_5, &ch2_reading );
-    //   //add_sample((uint16_t)ch2_reading, ch2_ptr);
-    // }
 
 		vTaskDelayUntil(&xLastWakeTime, xPeriod);
   }
@@ -587,6 +571,16 @@ void draw_ui_text() {
   tft.setTextColor(TFT_WHITE);
 }
 
+void set_x_zoom(float zoom) {
+  timebase.x_zoom = zoom;
+  
+  if (timebase.x_zoom < 0.01) timebase.x_zoom = 0.01;
+  if (timebase.x_zoom > 20)  timebase.x_zoom = 20;
+
+  timebase.required_sample_rate = (uint16_t)(RESOLUTION_X / timebase.x_zoom + 0.5f);
+  timebase.time_per_div_us = (uint32_t)(GRID_OFFSET_X * timebase.x_zoom * 1000 + 0.5f);
+}
+
 void button_logic(ViewState *view) {
   hmiEventData_t data = getinputs(q);
   uint32_t& inputs = data.inputs;
@@ -661,10 +655,10 @@ void button_logic(ViewState *view) {
         view->y_zoom *= 0.9;
         update_grid();
       } else if (inputs & BTN_RIGHT) {
-        timebase.x_zoom *= 0.9;
+        set_x_zoom(timebase.x_zoom * 0.9f);
         update_grid();
       } else if (inputs & BTN_LEFT) {
-        timebase.x_zoom *= 1.1;
+        set_x_zoom(timebase.x_zoom * 1.1f);
         update_grid();
       }
       break;
@@ -701,10 +695,7 @@ void button_logic(ViewState *view) {
         break;
   }
 
-  if (timebase.x_zoom < 0.1) timebase.x_zoom = 0.1;
-  if (timebase.x_zoom > 20)  timebase.x_zoom = 20;
-
-  if (view->y_zoom < 0.1) view->y_zoom = 0.1;
+  if (view->y_zoom < 0.01) view->y_zoom = 0.01;
   if (view->y_zoom > 20)  view->y_zoom = 20;
 
   Serial.println((int)state);
@@ -750,12 +741,3 @@ void oscilloscope_task(void *pvParameters) {
     }
 
 }
-
-/*
-Todo:
-Measure
-Cursors
-Trigger settings
-Math
-Time values for x-axis
-*/
