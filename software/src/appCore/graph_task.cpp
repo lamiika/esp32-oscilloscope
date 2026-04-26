@@ -22,9 +22,11 @@
 #define MAX_VOLTS 16.0
 #define TIMESTEP_MS 1
 #define STR_LEN 20
-#define CH1_BUF_SIZE 1180
-#define CH2_BUF_SIZE (CH1_BUF_SIZE * 20)
-#define CH1_SAMPLE_RATE 1000
+#define CH1_MULTIPLIER 1
+#define CH2_MULTIPLIER 1
+#define CH1_BUF_SIZE 10240
+#define CH2_BUF_SIZE (CH1_BUF_SIZE * CH2_MULTIPLIER)
+#define CH1_SAMPLE_RATE 20000
 #define CH2_SAMPLE_RATE 20000
 
 /////////////////////////////// 3.Types ////////////////////////////////
@@ -132,13 +134,13 @@ Timebase timebase = {
 ViewState ch1_view = {
   .y_zoom = 1.0,
   .y_offset = 2385,
-  .x_multiplier = 1
+  .x_multiplier = CH1_MULTIPLIER
 };
 
 ViewState ch2_view = {
   .y_zoom = 1.0,
   .y_offset = 2385,
-  .x_multiplier = 20
+  .x_multiplier = CH2_MULTIPLIER
 };
 
 uint16_t rb_ch1_storage[CH1_BUF_SIZE];
@@ -204,6 +206,37 @@ UiText ui_text = {
 };
 
 //////////////////////////// 5.2.Functions /////////////////////////////
+
+typedef struct
+{
+  uint32_t index;
+  uint32_t sum;
+  uint16_t max;
+  uint16_t min;
+  bool needs_reset = true;
+} avg_t;
+
+avg_t ch1_avg;
+avg_t ch2_avg;
+
+void average_add( uint16_t sample, afeChannel_t ch )
+{
+  avg_t *avg = ch == CHANNEL_1 ? &ch1_avg : &ch2_avg;
+
+  if (avg->needs_reset) {
+    avg->index = 0;
+    avg->sum = 0;
+    avg->max = sample;
+    avg->min = sample;
+    avg->needs_reset = false;
+  }
+  
+  avg->sum += sample;
+  avg->index++;
+
+  if (sample < avg->min) avg->min = sample;
+  if (sample > avg->max) avg->max = sample;
+}
 
 static const uint32_t rollingAverageLength = 3;
 
@@ -314,10 +347,19 @@ void float_to_string(float val, char *out, size_t out_len) {
   }
 }
 
+void set_x_zoom(float zoom) {
+  timebase.x_zoom = zoom;
+  
+  if (timebase.x_zoom < 0.001) timebase.x_zoom = 0.001;
+  if (timebase.x_zoom > 20)  timebase.x_zoom = 20;
+
+  timebase.required_sample_rate = (uint16_t)(RESOLUTION_X / timebase.x_zoom + 0.5f);
+  timebase.time_per_div_us = (uint32_t)(GRID_OFFSET_X * timebase.x_zoom * 1000 + 0.5f);
+}
+
 void apply_autoset(RingBuffer *rb, ViewState *view) {
   uint16_t min_val = rb->samples[0];
   uint16_t max_val = rb->samples[0];
-  uint16_t val_delta = max_val - min_val;
 
   for (size_t i = 1; i < rb->buffer_size; ++i) {
     if (rb->samples[i] < min_val) {
@@ -327,25 +369,32 @@ void apply_autoset(RingBuffer *rb, ViewState *view) {
       max_val = rb->samples[i];
     }
   }
-  view->y_offset = min_val + (val_delta) / 2;
+
+  uint16_t val_delta = max_val - min_val;
+
+  view->y_offset = (uint32_t)((float)(min_val + max_val) * 0.5f + 0.5f);
   if (val_delta == 0) {
-    view->y_zoom = RESOLUTION_Y * 1.1;
+    view->y_zoom = 20.0f;
   } else {
-    view->y_zoom = RESOLUTION_Y / (val_delta) * 1.1;
+    view->y_zoom = ((float)RESOLUTION_Y / (float)val_delta) * 0.8f;
   }
+  if (view->y_zoom > 20.0f) view->y_zoom = 20.0f;
+  if (view->y_zoom < 0.01f) view->y_zoom = 0.01f;
 
   uint32_t sum = 0;
   for (size_t i = 0; i < rb->buffer_size; i++) {
     sum += rb->samples[i];
   }
-  uint32_t mean = sum / (rb->buffer_size + 0.5f);
+  uint32_t mean = (uint32_t)((sum / rb->buffer_size) + 0.5f);
 
-  uint32_t crossings[100];
+  uint32_t crossings[5000];
   uint32_t count = 0;
+  uint16_t hysteresis = (uint16_t)((float)val_delta * 0.04f + 0.5f);
+  if (hysteresis < 2) hysteresis = 2;
 
   for (size_t i = 1; i < rb->buffer_size; i++) {
-    if (rb->samples[i-1] < mean - 5 && rb->samples[i] >= mean + 5) {
-      if (count < 100) crossings[count++] = i;
+    if (rb->samples[i-1] < mean - hysteresis && rb->samples[i] >= mean + hysteresis) {
+      if (count < 5000) crossings[count++] = i;
     }
   }
 
@@ -356,15 +405,21 @@ void apply_autoset(RingBuffer *rb, ViewState *view) {
     for (int i = 1; i < count; i++) {
       total += (crossings[i] - crossings[i-1]);
     }
-    avg_period = (float)total / (count - 1);
+    avg_period = (float)total / (float)(count - 1);
   }
 
-  float desired_cycles = 3.0f;
-  float samples_per_screen = avg_period * desired_cycles;
-  
-  timebase.x_zoom = (uint16_t)(samples_per_screen / (float)RESOLUTION_X + 0.5f);
-
   timebase.x_offset = 0;
+
+  if (avg_period <= 0.0f) {
+    set_x_zoom(1.0f);
+    return;
+  }
+
+  float desired_cycles = 2.0f;
+  float samples_per_screen = avg_period * desired_cycles;
+
+  Serial.println(samples_per_screen);
+  set_x_zoom((samples_per_screen / (float)RESOLUTION_X));
 }
 
 void autoset() {
@@ -540,7 +595,7 @@ void draw_grid(ViewState view) {
     uint16_t y = (i+1)*GRID_OFFSET_Y;
 		tft.drawFastHLine(0, y, RESOLUTION_X, TFT_DARKGREY);
     tft.setTextSize(TFT_SMALL);
-    tft.drawString(grid_values.y[i], 10, y-3);
+    tft.drawString(grid_values.y[i], 14, y-3);
 	}
 }
 
@@ -569,16 +624,6 @@ void draw_ui_text() {
     tft.drawString(ui_text.ch2, 250, 7);
   }
   tft.setTextColor(TFT_WHITE);
-}
-
-void set_x_zoom(float zoom) {
-  timebase.x_zoom = zoom;
-  
-  if (timebase.x_zoom < 0.001) timebase.x_zoom = 0.001;
-  if (timebase.x_zoom > 20)  timebase.x_zoom = 20;
-
-  timebase.required_sample_rate = (uint16_t)(RESOLUTION_X / timebase.x_zoom + 0.5f);
-  timebase.time_per_div_us = (uint32_t)(GRID_OFFSET_X * timebase.x_zoom * 1000 + 0.5f);
 }
 
 void button_logic(ViewState *view) {
