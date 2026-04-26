@@ -468,16 +468,20 @@ LOCAL void adc_init_oneshot(void)
         .atten = ADC_ATTEN_DB_12,           
     };
 
-    // ADC1 INIT ( ADC1 is configured in adc_init_continuous)
-    // adc_oneshot_unit_init_cfg_t adc1_cfg = 
-    // {
-    //     .unit_id = ADC_UNIT_1,
-    //     .clk_src = ADC_DIGI_CLK_SRC_DEFAULT,
-    //     .ulp_mode = ADC_ULP_MODE_DISABLE,
-    // };
+#ifdef ADC1_ONESHOT
+    
+    // ADC1 INIT
+    adc_oneshot_unit_init_cfg_t adc1_cfg = 
+    {
+        .unit_id = ADC_UNIT_1,
+        .clk_src = ADC_DIGI_CLK_SRC_DEFAULT,
+        .ulp_mode = ADC_ULP_MODE_DISABLE,
+    };
 
-    // adc_oneshot_new_unit( &adc1_cfg, &afeCore.ch2_handle );
-    // adc_oneshot_config_channel( afeCore.ch2_handle, CH2_VOLTAGE, &chan_cfg );
+    adc_oneshot_new_unit( &adc1_cfg, &afeCore.ch2_handle );
+    adc_oneshot_config_channel( afeCore.ch2_handle, CH2_VOLTAGE, &chan_cfg );
+
+#endif
 
     // ADC2 INIT
     adc_oneshot_unit_init_cfg_t adc2_cfg = 
@@ -559,8 +563,11 @@ void afeCore_init(void)
     afeCore_setChannelRange( RANGE_15V, CHANNEL_2 );
 
     adc_init_oneshot();
-    adc_init_continuous();
 
+#ifndef ADC1_ONESHOT
+    adc_init_continuous();
+#endif
+    
     timer2_configure();
 
     afeCore.isInitialized = true;

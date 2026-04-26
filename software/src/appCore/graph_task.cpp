@@ -292,13 +292,26 @@ void adc_task(void *pvParameters) {
         int ch1_reading;
 
         adc_oneshot_read( afeCore_getChannelAdcHandle( CHANNEL_1 ), 
-                          ADC_CHANNEL_8, &ch1_reading );
+                          CH1_VOLTAGE, &ch1_reading );
 
         afeCore_updateNewestSample( ch1_reading, CHANNEL_1 ); 
         
         add_sample( (uint16_t)ch1_reading, CHANNEL_1 );
       } 
     }
+
+    if( ch_states.ch2_active )
+    {
+      int ch2_reading;
+
+      adc_oneshot_read( afeCore_getChannelAdcHandle( CHANNEL_2 ), 
+                        CH2_VOLTAGE, &ch2_reading );
+
+      afeCore_updateNewestSample( ch2_reading, CHANNEL_2 ); 
+        
+      add_sample( (uint16_t)ch2_reading, CHANNEL_2 );
+    }
+
   }
 }
 
