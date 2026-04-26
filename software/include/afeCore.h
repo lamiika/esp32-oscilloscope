@@ -148,6 +148,9 @@ typedef struct
     uint16_t ch1_sampleBuffer[SAMPLE_BUFFER_SIZE];
     uint16_t ch2_sampleBuffer[SAMPLE_BUFFER_SIZE];
 
+    uint16_t ch1_newestSample;
+    uint16_t ch2_newestSample;
+
     // caliration values for ch1 and ch2
     afeChannelCal_t ch1_cal;
     afeChannelCal_t ch2_cal;
@@ -269,6 +272,8 @@ extern afeErr_t afeCore_getScaling( float *positive, float *negative,
                                     afeChannel_t channel );
 
 extern void printStr( const char *str );
+
+extern void afeCore_updateNewestSample( uint16_t sample, afeChannel_t channel );
 
 #ifdef __cplusplus
 }

@@ -111,17 +111,13 @@ afeCore_t afeCore =
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static const size_t g_frame_size = 256;
-
 // Called from ISR context when DMA has new ADC data
 static bool IRAM_ATTR adc_convDoneCallback( adc_continuous_handle_t handle,
                                             const adc_continuous_evt_data_t *edata,
                                             void *user_ctx )
 {
-    // edata->size gives number of bytes available
-    // edata->buf is the DMA buffer pointer
     const uint8_t *data = edata->conv_frame_buffer;
-    size_t len = g_frame_size;
+    size_t len = edata->size;
 
 
     // Example: iterate through samples
@@ -139,6 +135,7 @@ static bool IRAM_ATTR adc_convDoneCallback( adc_continuous_handle_t handle,
         if( unit == 0 )
         {
             add_sample( value, CHANNEL_2 );
+            afeCore_updateNewestSample( value, CHANNEL_2 );
         }
         // ADC 2
         else if( unit == 1 )
@@ -439,7 +436,7 @@ double afeCore_getCalibratedVoltage( afeChannel_t channel )
     switch( channel )
     {
         case CHANNEL_1:
-            adc_oneshot_read( afeCore_getChannelAdcHandle(CHANNEL_1), CH1_VOLTAGE, &sample );
+            sample = afeCore.ch1_newestSample;
             sample += afeCore.ch1_cal.zeroOffset[ afeCore.ch1_range ];
             sample *= -1;
             sample *= sample < 0 ? afeCore.ch1_cal.nScaling[ afeCore.ch1_range ] : afeCore.ch1_cal.pScaling[ afeCore.ch1_range ];
@@ -447,7 +444,7 @@ double afeCore_getCalibratedVoltage( afeChannel_t channel )
             break;
         
         case CHANNEL_2:
-            adc_oneshot_read( afeCore_getChannelAdcHandle(CHANNEL_2), CH2_VOLTAGE, &sample );
+            sample = afeCore.ch2_newestSample;
             sample += afeCore.ch2_cal.zeroOffset[ afeCore.ch2_range ];
             sample *= -1;
             sample *= sample < 0 ? afeCore.ch2_cal.nScaling[ afeCore.ch2_range ] : afeCore.ch2_cal.pScaling[ afeCore.ch2_range ];
@@ -496,13 +493,15 @@ LOCAL void adc_init_oneshot(void)
 //////////////////////////////////////
 //////////////////////////////////////
 
+static const size_t g_frame_size = 256;
+
 LOCAL void adc_init_continuous(void)
 {
     adc_continuous_handle_t handle;
 
     adc_continuous_handle_cfg_t handle_cfg = 
     {
-        .max_store_buf_size = 1024,
+        .max_store_buf_size = (g_frame_size * 4),
         .conv_frame_size = g_frame_size,
     };
 
@@ -860,3 +859,14 @@ float afeCore_sample2VoltageCal( int32_t sample, afeChannel_t channel )
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
+void afeCore_updateNewestSample( uint16_t sample, afeChannel_t channel )
+{
+    switch( channel )
+    {
+        case CHANNEL_1: afeCore.ch1_newestSample = sample; break;
+        case CHANNEL_2: afeCore.ch2_newestSample = sample; break;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////

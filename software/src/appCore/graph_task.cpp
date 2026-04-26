@@ -242,9 +242,6 @@ void add_sample( uint16_t val, afeChannel_t ch )
 }
 
 void adc_task(void *pvParameters) {
-  TickType_t xLastWakeTime;
-  const TickType_t xPeriod = pdMS_TO_TICKS(1);
-  xLastWakeTime = xTaskGetTickCount();
 
 	while (true) {
 
@@ -252,20 +249,23 @@ void adc_task(void *pvParameters) {
 
     if( ch_states.ch1_active ) 
     {
-      int ch1_reading;
-      
-      if ( afeCore_isChannel1Disabled() )
-      {
+      if( afeCore_isChannel1Disabled() ) 
+      { 
         add_sample(0, CHANNEL_1);
+        afeCore_updateNewestSample( 0, CHANNEL_1 ); 
       } 
       else 
       {
-        adc_oneshot_read( afeCore_getChannelAdcHandle( CHANNEL_1 ), ADC_CHANNEL_8, &ch1_reading );
-        add_sample((uint16_t)ch1_reading, CHANNEL_1);
+        int ch1_reading;
+
+        adc_oneshot_read( afeCore_getChannelAdcHandle( CHANNEL_1 ), 
+                          ADC_CHANNEL_8, &ch1_reading );
+
+        afeCore_updateNewestSample( ch1_reading, CHANNEL_1 ); 
+        
+        add_sample( (uint16_t)ch1_reading, CHANNEL_1 );
       } 
     }
-
-		//vTaskDelayUntil(&xLastWakeTime, xPeriod);
   }
 }
 
@@ -276,7 +276,6 @@ static void oscilloscope_deinit(){
 
   mutex_release();
 
-  vTaskDelete(adc);
   vTaskDelete(NULL); // self-delete
 }
 
