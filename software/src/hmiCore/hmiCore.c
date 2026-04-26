@@ -37,6 +37,9 @@
 // ROW_SEL as output with esp idf api
 #include <Arduino.h>
 
+#include <esp32-oscilloscope.h>
+#include <afeCore.h>
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -46,14 +49,14 @@
 #define NUMBER_OF_INPUTS        16
 
 // These values are in milli seconds if sampling frequency is 1kHz
-#define DEFAULT_PRESSED_SAMPLES         50
+#define DEFAULT_PRESSED_SAMPLES         30
 #define DEFAULT_HOLD_SAMPLES            500
 #define DEFAULT_HOLD_RELEASE_SAMPLES    30
 
 #define setHigh(x)              gpio_set_level((gpio_num_t)x, 1)
 #define setLow(x)               gpio_set_level((gpio_num_t)x, 0)
 #define read(x)                 gpio_get_level((gpio_num_t)x)
-#define delay_us(x)             //ets_delay_us(x)
+#define delay_us(x)             ets_delay_us(x)
 #define delay_ms(x)             vTaskDelay(pdMS_TO_TICKS(x))
 
 #define clkPulse(x)             do{\
@@ -255,7 +258,7 @@ inline bool hmiCore_eventFound( hmiEventData_t e, hmiEvent_t event,
 ////////////////////////////////////////////////////////////////////////////////
 
 // delay used between output level changes in the scanKeyboard function (µs)
-static const uint32_t scanningDelay = 0;
+static const uint32_t scanningDelay = 1;
 
 LOCAL uint32_t scanKeyboard()
 {
@@ -426,6 +429,8 @@ LOCAL void hmiHandler( void * pvParameters )
                 };
 
                 if( hmiCore.callback != NULL ) { hmiCore.callback(event); }
+
+                if( event.event == E_PRESSED && event.inputs & BTN_SCALE ) printStr("Repeat");
 
                 BaseType_t ret = xQueueSendToBack( hmiCore.xEventQueue,
                                                    (void*)&event, 0 );

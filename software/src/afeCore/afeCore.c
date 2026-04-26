@@ -49,6 +49,9 @@
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -207,21 +210,21 @@ static bool IRAM_ATTR adc_convDoneCallback( adc_continuous_handle_t handle,
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
+extern TaskHandle_t adc;
+
 // Interrupt service routine used to sample the adcs
 static bool IRAM_ATTR timer2_isrCallback( gptimer_handle_t timer, 
                                           const gptimer_alarm_event_data_t *edata, 
                                           void *user_ctx)
 {
-    // afeCore.ch1_sampleBuffer[afeCore.currentSampleIndex] = channel1_readRaw();
-    // afeCore.ch2_sampleBuffer[afeCore.currentSampleIndex] = channel2_readRaw();
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-    // if( ++afeCore.currentSampleIndex >= SAMPLE_BUFFER_SIZE )
-    // {
-    //     afeCore.currentSampleIndex = 0;
-    // }
+    if( adc != NULL )
+    {
+        vTaskNotifyGiveFromISR( adc, &xHigherPriorityTaskWoken );    
+    }
 
-    // return true to re-enable the alarm
-    return true;  
+    portYIELD_FROM_ISR( xHigherPriorityTaskWoken );  
 }
 
 //////////////////////////////////////
@@ -253,11 +256,11 @@ LOCAL void timer2_configure(void)
     gptimer_event_callbacks_t cbs = { .on_alarm = timer2_isrCallback };
     gptimer_register_event_callbacks( gptimer, &cbs, NULL );
 
-    // Set alarm to 100 µs => 10 kHz
+    // Set alarm to 50 µs => 20 kHz
     gptimer_alarm_config_t alarm_config = 
     {
-        // 100 ticks = 100 µs
-        .alarm_count = 100,       
+        // 50 ticks = 50 µs
+        .alarm_count = 50,       
         .reload_count = 0,
         .flags.auto_reload_on_alarm = true,
     };

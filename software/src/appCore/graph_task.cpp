@@ -237,7 +237,7 @@ void add_sample( uint16_t val, afeChannel_t ch )
 
   RingBuffer *rb = ch == CHANNEL_1 ? ch1_ptr : ch2_ptr;
 
-	rb->samples[rb->write_head] = ADC_RESOLUTION - 1 - rollingAverage( val, ch );
+	rb->samples[rb->write_head] = ADC_RESOLUTION - 1 - val;//rollingAverage( val, ch );
 	rb->write_head = (rb->write_head + 1) % rb->buffer_size;
 }
 
@@ -247,6 +247,9 @@ void adc_task(void *pvParameters) {
   xLastWakeTime = xTaskGetTickCount();
 
 	while (true) {
+
+    xTaskNotifyWait( 0, ULONG_MAX, NULL, portMAX_DELAY ); 
+
     if( ch_states.ch1_active ) 
     {
       int ch1_reading;
@@ -262,7 +265,7 @@ void adc_task(void *pvParameters) {
       } 
     }
 
-		vTaskDelayUntil(&xLastWakeTime, xPeriod);
+		//vTaskDelayUntil(&xLastWakeTime, xPeriod);
   }
 }
 
